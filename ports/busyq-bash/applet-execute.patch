@@ -1,10 +1,11 @@
 diff --git a/execute_cmd.c b/execute_cmd.c
-index 1111111..2222222 100644
+index 070f511..2e38a46 100644
 --- a/execute_cmd.c
 +++ b/execute_cmd.c
-@@ -82,6 +82,10 @@
+@@ -80,6 +80,10 @@ extern int errno;
+ #include "pathexp.h"
  #include "hashcmd.h"
-
+ 
 +/* busyq: applet table for embedded command dispatch */
 +#include "busyq_applet_table.h"
 +#include <sys/wait.h>
@@ -12,11 +13,12 @@ index 1111111..2222222 100644
  #if defined (COND_COMMAND)
  #  include "test.h"
  #endif
-@@ -95,6 +99,56 @@
+@@ -94,6 +98,78 @@ extern int errno;
+ 
  #include "input.h"
-
-+/* busyq: Execute an embedded applet if the resolved command path is our
-+ * marker value ("/proc/self/exe" set by findcmd.c).
+ 
++
++/* busyq: Execute an embedded applet if the command name matches one.
 + *
 + * For NOFORK applets, call the main function directly in-process.
 + * For regular applets, fork a child and call the main function there.
@@ -27,7 +29,6 @@ index 1111111..2222222 100644
 +busyq_execute_applet (WORD_LIST *words)
 +{
 +  char *command;
-+  const char *name;
 +  const struct busyq_applet *applet;
 +  char **argv;
 +  int argc, status;
@@ -40,24 +41,9 @@ index 1111111..2222222 100644
 +  if (!command)
 +    return -1;
 +
-+  /* Check if this command resolved to our applet marker */
-+  if (strcmp (command, "/proc/self/exe") != 0)
-+    {
-+      /* Also check by bare name (for when command is not yet resolved) */
-+      name = command;
-+      applet = busyq_find_applet (name);
-+      if (!applet)
-+        return -1;
-+    }
-+  else
-+    {
-+      /* Marker path - look up the original command name from next word
-+       * or from basename of the first word */
-+      name = words->word->word;
-+      applet = busyq_find_applet (name);
-+      if (!applet)
-+        return -1;
-+    }
++  applet = busyq_find_applet (command);
++  if (!applet)
++    return -1;
 +
 +  /* Build argc/argv from word list */
 +  argc = 0;
@@ -103,11 +89,10 @@ index 1111111..2222222 100644
 +        }
 +    }
 +}
-+
  #if defined (ALIAS)
  #  include "alias.h"
  #endif
-@@ -4935,6 +4989,18 @@ execute_from_filesystem:
+@@ -4935,6 +5011,18 @@ execute_from_filesystem:
      ;	/* can't turn off nofork here, too many processes have the FIFOs open */
  #endif
  #endif
