@@ -1,16 +1,15 @@
 vcpkg_download_distfile(ARCHIVE
     URLS "https://github.com/jqlang/jq/releases/download/jq-1.8.1/jq-1.8.1.tar.gz"
     FILENAME "jq-1.8.1.tar.gz"
-    SHA512 0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+    SHA512 b09d48dbeaac7b552397b75692ed7833afa72186de80d977fb1b887a14ac66c02f677acdd79f9a2736db1fd738b7ce57a39725e34846bfa21ed3728cd7adc187
 )
 
 vcpkg_extract_source_archive(SOURCE_PATH ARCHIVE "${ARCHIVE}")
 
-# Find oniguruma from vcpkg
-find_path(ONIG_INCLUDE_DIR oniguruma.h PATHS "${CURRENT_INSTALLED_DIR}/include" NO_DEFAULT_PATH)
-find_library(ONIG_LIBRARY onig PATHS "${CURRENT_INSTALLED_DIR}/lib" NO_DEFAULT_PATH)
-
-# jq uses autotools
+# jq uses autotools.
+# We do NOT pass -Dmain=jq_main in CFLAGS here because that breaks
+# configure's "C compiler works" test. Instead we compile jq's main.c
+# separately after the build with the rename flag.
 vcpkg_configure_make(
     SOURCE_PATH "${SOURCE_PATH}"
     OPTIONS
@@ -19,35 +18,33 @@ vcpkg_configure_make(
         --disable-maintainer-mode
         --disable-docs
         "--with-oniguruma=${CURRENT_INSTALLED_DIR}"
-    OPTIONS_RELEASE
-        "CFLAGS=-Dmain=jq_main -ffunction-sections -fdata-sections -Oz -DNDEBUG"
-    OPTIONS_DEBUG
-        "CFLAGS=-Dmain=jq_main -g"
 )
 
 vcpkg_build_make()
 
-# Install libjq
-file(GLOB JQ_STATIC_LIB "${CURRENT_BUILDTREES_DIR}/${TARGET_TRIPLET}-rel/src/.libs/libjq.a")
+set(JQ_BUILD_REL "${CURRENT_BUILDTREES_DIR}/${TARGET_TRIPLET}-rel")
+
+# Install libjq.a (autotools puts it in .libs/ under the build root)
+file(GLOB JQ_STATIC_LIB
+    "${JQ_BUILD_REL}/.libs/libjq.a"
+    "${JQ_BUILD_REL}/src/.libs/libjq.a"
+)
+file(MAKE_DIRECTORY "${CURRENT_PACKAGES_DIR}/lib")
 file(INSTALL ${JQ_STATIC_LIB} DESTINATION "${CURRENT_PACKAGES_DIR}/lib")
 
-# Install jq main object (contains jq_main)
-# The jq binary's main.o is compiled with -Dmain=jq_main, so we can extract it
-# or simply install the whole jq objects. Since jq binary links libjq + main.c,
-# we need main.c's object.
-file(GLOB JQ_MAIN_OBJ "${CURRENT_BUILDTREES_DIR}/${TARGET_TRIPLET}-rel/src/jq-main.o")
-if(NOT JQ_MAIN_OBJ)
-    # Autotools may name it differently
-    file(GLOB JQ_MAIN_OBJ "${CURRENT_BUILDTREES_DIR}/${TARGET_TRIPLET}-rel/src/main.o")
-endif()
-if(JQ_MAIN_OBJ)
-    # Create a static lib from the main object for easy linking
-    vcpkg_execute_required_process(
-        COMMAND ar rcs "${CURRENT_PACKAGES_DIR}/lib/libjqmain.a" ${JQ_MAIN_OBJ}
-        WORKING_DIRECTORY "${CURRENT_BUILDTREES_DIR}"
-        LOGNAME "ar-jqmain-${TARGET_TRIPLET}"
-    )
-endif()
+# Build jq's main.c separately with -Dmain=jq_main to create libjqmain.a
+# Use shell to invoke cc since CMAKE_C_COMPILER may not be set in portfile context
+vcpkg_execute_required_process(
+    COMMAND sh -c "cc -Dmain=jq_main -DHAVE_CONFIG_H -I'${JQ_BUILD_REL}' -I'${SOURCE_PATH}/src' -I'${CURRENT_INSTALLED_DIR}/include' -c '${SOURCE_PATH}/src/main.c' -o '${JQ_BUILD_REL}/jq_main.o'"
+    WORKING_DIRECTORY "${JQ_BUILD_REL}"
+    LOGNAME "compile-jqmain-${TARGET_TRIPLET}"
+)
+
+vcpkg_execute_required_process(
+    COMMAND ar rcs "${CURRENT_PACKAGES_DIR}/lib/libjqmain.a" "${JQ_BUILD_REL}/jq_main.o"
+    WORKING_DIRECTORY "${JQ_BUILD_REL}"
+    LOGNAME "ar-jqmain-${TARGET_TRIPLET}"
+)
 
 # Install headers
 file(INSTALL
