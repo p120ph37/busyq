@@ -1,0 +1,33 @@
+diff --git a/findcmd.c b/findcmd.c
+index 1111111..2222222 100644
+--- a/findcmd.c
++++ b/findcmd.c
+@@ -45,6 +45,13 @@
+ #include "hashcmd.h"
+ #include "findcmd.h"	/* matching prototypes and declarations */
+
++/* busyq: applet table for embedded command lookup */
++#include "busyq_applet_table.h"
++
++/* Marker path returned when a command is found in the applet table.
++ * execute_cmd.c checks for this to dispatch to the applet. */
++static const char BUSYQ_APPLET_MARKER[] = "/proc/self/exe";
++
+ #include <glob/strmatch.h>
+
+ #if !defined (errno)
+@@ -280,6 +287,14 @@ _find_user_command_internal (const char *name, int flags)
+   /* Search for the value of PATH in both the temporary environments and
+      in the regular list of variables. */
+   path_list = path_value ("PATH", 1);
++
++  /* busyq: check applet table before PATH search */
++  {
++    const struct busyq_applet *applet = busyq_find_applet(name);
++    if (applet)
++      return (savestring (BUSYQ_APPLET_MARKER));
++  }
++
+
+   if (path_list == 0)
+     return (savestring (name));

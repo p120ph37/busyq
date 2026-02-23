@@ -1,0 +1,14 @@
+{
+  "name": "busyq-curl",
+  "version": "8.18.0",
+  "description": "curl built as a static library with renamed main for busyq integration",
+  "dependencies": [],
+  "features": {
+    "ssl": {
+      "description": "SSL/TLS support via mbedtls with embedded CA certificates",
+      "dependencies": [
+        "mbedtls"
+      ]
+    }
+  }
+}

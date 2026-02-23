@@ -1,0 +1,41 @@
+diff --git a/lib/vtls/mbedtls.c b/lib/vtls/mbedtls.c
+index 2222222..3333333 100644
+--- a/lib/vtls/mbedtls.c
++++ b/lib/vtls/mbedtls.c
+@@ -506,6 +506,35 @@
+
+   /* Load the trusted CA */
+   mbedtls_x509_crt_init(&backend->cacert);
++
++  /* Load extra certificates from BUSYQ_EXTRA_CERTS environment variable.
++   * If the value starts with '/' or '.', treat as a file/directory path.
++   * Otherwise, treat as a literal PEM string. */
++  {
++    const char *extra_certs = getenv("BUSYQ_EXTRA_CERTS");
++    if(extra_certs && extra_certs[0]) {
++      if(extra_certs[0] == '/' || extra_certs[0] == '.') {
++#ifdef MBEDTLS_FS_IO
++        ret = mbedtls_x509_crt_parse_file(&backend->cacert, extra_certs);
++        if(ret < 0) {
++          ret = mbedtls_x509_crt_parse_path(&backend->cacert, extra_certs);
++        }
++        if(ret < 0) {
++          infof(data, "busyq: warning: failed to load extra certs from %s",
++                extra_certs);
++        }
++#endif
++      }
++      else {
++        /* Treat as literal PEM string */
++        ret = mbedtls_x509_crt_parse(&backend->cacert,
++                                     (const unsigned char *)extra_certs,
++                                     strlen(extra_certs) + 1);
++        if(ret < 0) {
++          infof(data, "busyq: warning: failed to parse extra certs PEM string");
++        }
++      }
++    }
++  }
+
+ #ifdef BUSYQ_EMBEDDED_CERTS
+   /* Load embedded Mozilla CA bundle when no explicit CA is configured */

@@ -5,8 +5,12 @@ build/
 # Source tarballs (downloaded at build time)
 sources/
 
+# vcpkg installed dependencies
+vcpkg_installed/
+
 # Generated files
 src/embedded_certs.h
+src/busybox_applets.h
 
 # IDE / editor
 .vscode/

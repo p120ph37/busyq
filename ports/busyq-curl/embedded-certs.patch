@@ -1,0 +1,34 @@
+diff --git a/lib/vtls/mbedtls.c b/lib/vtls/mbedtls.c
+index 1111111..2222222 100644
+--- a/lib/vtls/mbedtls.c
++++ b/lib/vtls/mbedtls.c
+@@ -28,6 +28,10 @@
+  */
+ #include "../curl_setup.h"
+
++#ifdef BUSYQ_EMBEDDED_CERTS
++#include "embedded_certs.h"
++#endif
++
+ #ifdef USE_MBEDTLS
+
+ /* Define this to enable lots of debugging for mbedTLS */
+@@ -502,6 +506,18 @@
+
+   /* Load the trusted CA */
+   mbedtls_x509_crt_init(&backend->cacert);
++
++#ifdef BUSYQ_EMBEDDED_CERTS
++  /* Load embedded Mozilla CA bundle when no explicit CA is configured */
++  if(verifypeer && !ca_info_blob && !ssl_cafile && !ssl_capath) {
++    ret = mbedtls_x509_crt_parse(&backend->cacert,
++                                 (const unsigned char *)busyq_embedded_cacerts,
++                                 busyq_embedded_cacerts_len + 1);
++    if(ret < 0) {
++      infof(data, "busyq: warning: failed to load embedded CA certs");
++    }
++  }
++#endif
+
+   if(ca_info_blob && verifypeer) {
+ #ifdef MBEDTLS_PEM_PARSE_C

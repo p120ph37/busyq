@@ -1,0 +1,8 @@
+{
+  "name": "busyq-jq",
+  "version": "1.8.1",
+  "description": "jq built as a static library with renamed main for busyq integration",
+  "dependencies": [
+    "oniguruma"
+  ]
+}

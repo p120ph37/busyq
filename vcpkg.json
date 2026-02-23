@@ -3,7 +3,25 @@
   "version-string": "0.1.0",
   "description": "Single-binary bash+curl+jq+busybox for distroless containers",
   "dependencies": [
-    "mbedtls",
-    "oniguruma"
-  ]
+    "busyq-bash",
+    "busyq-busybox",
+    "busyq-jq",
+    "oniguruma",
+    {
+      "name": "busyq-curl",
+      "default-features": false
+    }
+  ],
+  "features": {
+    "ssl": {
+      "description": "SSL/TLS support via mbedtls with embedded CA certificates",
+      "dependencies": [
+        "mbedtls",
+        {
+          "name": "busyq-curl",
+          "features": ["ssl"]
+        }
+      ]
+    }
+  }
 }

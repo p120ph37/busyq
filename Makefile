@@ -5,4 +5,4 @@ docker:
 	docker buildx build --output=out .
 
 clean:
-	rm -rf out/ build/ sources/
+	rm -rf out/ build/ sources/ vcpkg_installed/

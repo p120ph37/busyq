@@ -33,24 +33,46 @@ RUN apk add --no-cache \
     flex \
     texinfo \
     perl \
-    linux-headers
+    linux-headers \
+    xz
 
 # Copy project files
 COPY . /src
 WORKDIR /src
 
-# Install vcpkg library dependencies (mbedtls, oniguruma)
-# These are built with LTO flags via EXTRA_CFLAGS automatically
-RUN vcpkg install --triplet "$(uname -m)-linux"
+# ---- Build variant 1: no SSL ----
+# Install all overlay port dependencies (bash, busybox, curl-nossl, jq)
+RUN vcpkg install
 
-# Download and extract source tarballs
-RUN scripts/download-sources.sh
+# Build the busyq binary
+RUN cmake -B build/none -S . \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DBUSYQ_SSL=OFF \
+    && cmake --build build/none
 
-# Build variant 1: no SSL
-RUN scripts/build.sh --no-ssl
+# Strip and compress
+RUN strip --strip-all build/none/busyq \
+    && mkdir -p out \
+    && cp build/none/busyq out/busyq \
+    && upx --best --lzma out/busyq || true
 
-# Build variant 2: with mbedtls SSL + embedded CA certs
-RUN scripts/build.sh --with-mbedtls
+# ---- Build variant 2: with SSL ----
+# Generate embedded CA certificates
+RUN scripts/generate-certs.sh src
+
+# Install with SSL feature enabled
+RUN vcpkg install "busyq[ssl]"
+
+# Build the SSL variant
+RUN cmake -B build/ssl -S . \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DBUSYQ_SSL=ON \
+    && cmake --build build/ssl
+
+# Strip and compress
+RUN strip --strip-all build/ssl/busyq \
+    && cp build/ssl/busyq out/busyq-ssl \
+    && upx --best --lzma out/busyq-ssl || true
 
 # ============================================================
 # Stage 2: Extract binaries

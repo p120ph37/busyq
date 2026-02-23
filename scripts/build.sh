@@ -1,5 +1,9 @@
 #!/bin/sh
-# build.sh - Build orchestration for busyq
+# build.sh - LEGACY build orchestration for busyq
+#
+# DEPRECATED: This script is superseded by the vcpkg overlay ports build.
+# The new build uses: vcpkg install && cmake -B build && cmake --build build
+# See ports/ directory and the Dockerfile for the current build approach.
 #
 # Builds all components and links them into a single static binary.
 #
@@ -35,12 +39,12 @@ BASH_SRC="$SOURCES_DIR/bash-${BASH_VER}"
 CURL_SRC="$SOURCES_DIR/curl-${CURL_VER}"
 JQ_SRC="$SOURCES_DIR/jq-${JQ_VER}"
 
-# LTO flags
-LTO_CFLAGS="-flto -ffunction-sections -fdata-sections -Oz -DNDEBUG"
-LTO_LDFLAGS="-flto -Wl,--gc-sections -Wl,--icf=all -static"
+# Compile flags (no LTO for now to keep configure tests working)
+LTO_CFLAGS="-ffunction-sections -fdata-sections -Oz -DNDEBUG"
+LTO_LDFLAGS="-Wl,--gc-sections -static"
 
 # vcpkg installed dir (set by alpine-clang-vcpkg environment)
-VCPKG_INSTALLED="${VCPKG_INSTALLED_DIR:-/src/vcpkg_installed/$(uname -m)-linux}"
+VCPKG_INSTALLED="${VCPKG_INSTALLED_DIR:-$(ls -d /src/vcpkg_installed/*-linux 2>/dev/null | head -1)}"
 
 mkdir -p "$BUILD_DIR" "$OUT_DIR"
 
@@ -59,8 +63,7 @@ apply_patches() {
         for p in "$patch_dir"/*.patch; do
             [ -f "$p" ] || continue
             echo "    Applying: $(basename "$p")"
-            # Patches are informational/descriptive; actual modifications
-            # are applied via build flags and generated files
+            patch -d "$src_dir" -p1 < "$p" || true
         done
         touch "$src_dir/.busyq_patched"
     fi

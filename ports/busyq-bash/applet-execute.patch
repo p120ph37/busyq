@@ -1,0 +1,128 @@
+diff --git a/execute_cmd.c b/execute_cmd.c
+index 1111111..2222222 100644
+--- a/execute_cmd.c
++++ b/execute_cmd.c
+@@ -82,6 +82,10 @@
+ #include "hashcmd.h"
+
++/* busyq: applet table for embedded command dispatch */
++#include "busyq_applet_table.h"
++#include <sys/wait.h>
++
+ #if defined (COND_COMMAND)
+ #  include "test.h"
+ #endif
+@@ -95,6 +99,56 @@
+ #include "input.h"
+
++/* busyq: Execute an embedded applet if the resolved command path is our
++ * marker value ("/proc/self/exe" set by findcmd.c).
++ *
++ * For NOFORK applets, call the main function directly in-process.
++ * For regular applets, fork a child and call the main function there.
++ *
++ * Returns the exit status if an applet was executed, or -1 if the
++ * command is not an applet. */
++static int
++busyq_execute_applet (WORD_LIST *words)
++{
++  char *command;
++  const char *name;
++  const struct busyq_applet *applet;
++  char **argv;
++  int argc, status;
++  WORD_LIST *w;
++
++  if (!words || !words->word)
++    return -1;
++
++  command = words->word->word;
++  if (!command)
++    return -1;
++
++  /* Check if this command resolved to our applet marker */
++  if (strcmp (command, "/proc/self/exe") != 0)
++    {
++      /* Also check by bare name (for when command is not yet resolved) */
++      name = command;
++      applet = busyq_find_applet (name);
++      if (!applet)
++        return -1;
++    }
++  else
++    {
++      /* Marker path - look up the original command name from next word
++       * or from basename of the first word */
++      name = words->word->word;
++      applet = busyq_find_applet (name);
++      if (!applet)
++        return -1;
++    }
++
++  /* Build argc/argv from word list */
++  argc = 0;
++  for (w = words; w; w = w->next)
++    argc++;
++  argv = (char **)xmalloc ((argc + 1) * sizeof (char *));
++  argc = 0;
++  for (w = words; w; w = w->next)
++    argv[argc++] = w->word->word;
++  argv[argc] = (char *)NULL;
++
++  if (applet->flags & BUSYQ_APPLET_NOFORK)
++    {
++      /* NOFORK: run directly in-process */
++      status = applet->main_func (argc, argv);
++      free (argv);
++      return status;
++    }
++  else
++    {
++      /* Fork and run in child */
++      pid_t pid = fork ();
++      if (pid == 0)
++        {
++          /* Child */
++          _exit (applet->main_func (argc, argv));
++        }
++      else if (pid > 0)
++        {
++          int wstatus;
++          waitpid (pid, &wstatus, 0);
++          free (argv);
++          if (WIFEXITED (wstatus))
++            return WEXITSTATUS (wstatus);
++          return 128 + WTERMSIG (wstatus);
++        }
++      else
++        {
++          /* Fork failed, try in-process as fallback */
++          status = applet->main_func (argc, argv);
++          free (argv);
++          return status;
++        }
++    }
++}
++
+ #if defined (ALIAS)
+ #  include "alias.h"
+ #endif
+@@ -4935,6 +4989,18 @@ execute_from_filesystem:
+     ;	/* can't turn off nofork here, too many processes have the FIFOs open */
+ #endif
+ #endif
++
++  /* busyq: check if this is an embedded applet before execute_disk_command */
++  {
++    int applet_result = busyq_execute_applet (words);
++    if (applet_result >= 0)
++      {
++        result = applet_result;
++        last_command_exit_value = result;
++        goto return_result;
++      }
++  }
++
+   result = execute_disk_command (words, simple_command->redirects, command_line,
+ 			pipe_in, pipe_out, async, fds_to_close,
+ 			cmdflags);
