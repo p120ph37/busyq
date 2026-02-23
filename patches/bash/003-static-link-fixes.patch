@@ -1,0 +1,41 @@
+--- bash-5.3/Makefile.in.orig
++++ bash-5.3/Makefile.in
+@@ -1,5 +1,10 @@
+ # Makefile.in for bash - static link modifications for busyq
+
++# busyq: Rename main() to bash_main() so our custom entry point
++# in src/main.c can call it. This is done via preprocessor define
++# rather than source patching to minimize diff surface.
++CFLAGS += -Dmain=bash_main
++
+ # busyq: Ensure we build position-independent code for LTO compatibility
+ # and produce a static library that can be linked into the final binary.
+ #
+@@ -8,3 +13,6 @@
+ # 2. The internal libbash.a convenience library (already built by default)
+ # 3. The builtins library (libbuiltins.a)
+ # These are linked into the busyq binary at final link time.
++
++# busyq: Export bash_main symbol
++LDFLAGS += -Wl,--export-dynamic
+--- bash-5.3/shell.h.orig
++++ bash-5.3/shell.h
+@@ -0,0 +1,5 @@
++/* busyq: declare bash_main for external callers */
++#ifndef BUSYQ_BASH_MAIN_H
++#define BUSYQ_BASH_MAIN_H
++extern int bash_main(int argc, char **argv);
++#endif
+--- /dev/null
++++ bash-5.3/busyq_applet_table.h
+@@ -0,0 +1,10 @@
++/*
++ * busyq_applet_table.h - Shim header for bash source tree
++ *
++ * This is a copy/symlink of src/applet_table.h, placed in the bash
++ * source tree so that the patched findcmd.c and execute_cmd.c can
++ * #include it without modifying bash's include paths extensively.
++ */
++
++#include "applet_table.h"
++/* applet_table.h is added to bash's include path via -I flag in build.sh */

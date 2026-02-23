@@ -1,0 +1,43 @@
+--- curl-8.18.0/lib/vtls/mbedtls.c.orig
++++ curl-8.18.0/lib/vtls/mbedtls.c
+@@ -30,6 +30,10 @@
+ #include <mbedtls/ssl.h>
+ #include <mbedtls/x509_crt.h>
+
++#ifdef BUSYQ_EMBEDDED_CERTS
++#include "embedded_certs.h"
++#endif
++
+ /*
+  * busyq: Load embedded CA certificates when no explicit CA bundle
+  * is configured. This allows HTTPS to work out of the box in
+@@ -50,6 +54,31 @@
+  * This patch modifies the mbed_connect_step1() function (or the
+  * CA certificate loading section) to fall back to embedded certs.
+  */
++
++/*
++ * busyq_load_embedded_certs - Load built-in CA certificates
++ *
++ * Called when no CURL_CA_BUNDLE env var, no --cacert flag, and no
++ * system CA path is available. Loads the Mozilla CA bundle that
++ * was compiled into the binary.
++ *
++ * Also checks BUSYQ_EXTRA_CERTS env var for additional certificates:
++ *   - If value starts with '/' or '.', treats it as a file path
++ *   - Otherwise, treats it as a literal PEM string
++ */
++#ifdef BUSYQ_EMBEDDED_CERTS
++static int busyq_load_embedded_certs(mbedtls_x509_crt *cacert)
++{
++  int ret;
++
++  /* Load the embedded Mozilla CA bundle.
++   * mbedtls_x509_crt_parse() requires null-terminated PEM data,
++   * which busyq_embedded_cacerts[] already is (it's a C string). */
++  ret = mbedtls_x509_crt_parse(cacert,
++          (const unsigned char *)busyq_embedded_cacerts,
++          busyq_embedded_cacerts_len + 1);
++  return ret;
++}
++#endif /* BUSYQ_EMBEDDED_CERTS */

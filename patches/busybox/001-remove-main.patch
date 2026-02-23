@@ -1,0 +1,28 @@
+--- busybox-1.37.0/libbb/appletlib.c.orig
++++ busybox-1.37.0/libbb/appletlib.c
+@@ -1,5 +1,11 @@
+ /* vi: set sw=4 ts=4: */
+ /*
++ * busyq: Guard busybox's main() function.
++ * We provide our own main() in src/main.c that always dispatches to bash.
++ * The busybox applet infrastructure (applet table, run_applet_no_and_exit,
++ * etc.) is still used, but the entry point is ours.
++ */
++/*
+  * Utility routines.
+  *
+  * Copyright (C) tons of folks.  , like, those guys in include/busybox.h.
+@@ -800,6 +806,8 @@
+ 	_exit(rc);
+ }
+
++/* busyq: Our own main() is in src/main.c */
++#ifndef BUSYQ_NO_BUSYBOX_MAIN
+ #if ENABLE_BUILD_LIBBUSYBOX
+ int lbb_main(char **argv)
+ #else
+@@ -890,3 +898,4 @@
+ 	run_applet_and_exit(applet_name, argv);
+ 	bb_error_msg_and_die("applet not found");
+ }
++#endif /* BUSYQ_NO_BUSYBOX_MAIN */

@@ -1,0 +1,57 @@
+--- curl-8.18.0/lib/vtls/mbedtls.c.orig2
++++ curl-8.18.0/lib/vtls/mbedtls.c
+@@ -80,6 +80,51 @@
+  * after loading the embedded certs (if any) and the user-specified
+  * CA bundle (if any).
+  */
++
++#include <stdio.h>
++#include <string.h>
++#include <stdlib.h>
++
++/*
++ * busyq_load_extra_certs - Load additional CA certs from BUSYQ_EXTRA_CERTS
++ *
++ * The env var value is interpreted as:
++ *   - A file path if it starts with '/' or '.'
++ *   - A literal PEM string otherwise
++ *
++ * This allows users to add custom CA certs without modifying the binary,
++ * useful for corporate environments with internal CAs.
++ *
++ * Returns: 0 on success or if env var is not set,
++ *          negative mbedtls error on parse failure
++ */
++static int busyq_load_extra_certs(mbedtls_x509_crt *cacert)
++{
++  const char *extra = getenv("BUSYQ_EXTRA_CERTS");
++  int ret = 0;
++
++  if(!extra || !*extra)
++    return 0;
++
++  if(extra[0] == '/' || extra[0] == '.') {
++    /* Treat as file path */
++    ret = mbedtls_x509_crt_parse_file(cacert, extra);
++    if(ret < 0) {
++      /* Try as directory path */
++      ret = mbedtls_x509_crt_parse_path(cacert, extra);
++    }
++  }
++  else {
++    /* Treat as literal PEM string.
++     * mbedtls requires null-terminated PEM, and the env var string
++     * is already null-terminated. We pass strlen+1 to include the
++     * null terminator as mbedtls expects. */
++    size_t len = strlen(extra);
++    ret = mbedtls_x509_crt_parse(cacert,
++            (const unsigned char *)extra,
++            len + 1);
++  }
++
++  return ret;
++}
++
++/* This function should be called in mbed_connect_step1() after
++ * the primary CA cert loading, to append any extra certs from
++ * the environment. */

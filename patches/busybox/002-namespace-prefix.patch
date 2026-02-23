@@ -1,0 +1,12 @@
+--- busybox-1.37.0/Makefile.orig
++++ busybox-1.37.0/Makefile
+@@ -1,4 +1,9 @@
+ # Makefile for BusyBox
++#
++# busyq: Add namespace isolation header to avoid symbol collisions
++# with bash's xmalloc, safe_read, etc.
++CFLAGS += -include $(BUSYQ_SRC_DIR)/bb_namespace.h
++CFLAGS += -DBUSYQ_NO_BUSYBOX_MAIN
+ #
+ VERSION = 1
+ PATCHLEVEL = 37

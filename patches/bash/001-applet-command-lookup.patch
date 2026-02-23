@@ -1,0 +1,39 @@
+--- bash-5.3/findcmd.c.orig
++++ bash-5.3/findcmd.c
+@@ -28,6 +28,8 @@
+ #include "hashcmd.h"
+ #include "findcmd.h"
+
++#include "busyq_applet_table.h"
++
+ extern int posixly_correct;
+
+ /* Static functions defined and used in this file. */
+@@ -42,6 +44,9 @@
+ static int dot_found_in_search;
+ int check_hashed_filenames;
+
++/* busyq: marker path returned when a command resolves to an embedded applet */
++const char * const BUSYQ_APPLET_MARKER = "/proc/self/exe";
++
+ /* **************************************************************** */
+ /*                                                                  */
+ /*           Searching for commands                                 */
+@@ -80,6 +85,17 @@
+       return (savestring (pathname));
+     }
+
++  /* busyq: check if this command name matches an embedded applet.
++   * This runs after the hash table check but before PATH search,
++   * so applets take precedence over PATH but not over hashed commands.
++   * Absolute paths (handled above) bypass this check entirely. */
++  if (busyq_find_applet (pathname) != NULL)
++    {
++      /* Return the marker path. The execute layer detects this
++       * and dispatches to the applet's main function directly. */
++      return (savestring (BUSYQ_APPLET_MARKER));
++    }
++
+   /* If $PATH is in the temporary environment for this command, don't use the
+      hash table to search for the full pathname. */
+   path_list = value_of_path ();

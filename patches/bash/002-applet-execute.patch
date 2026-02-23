@@ -1,0 +1,101 @@
+--- bash-5.3/execute_cmd.c.orig
++++ bash-5.3/execute_cmd.c
+@@ -48,6 +48,10 @@
+ #include "execute_cmd.h"
+ #include "findcmd.h"
+
++#include "busyq_applet_table.h"
++#include <sys/wait.h>
++
++extern const char * const BUSYQ_APPLET_MARKER;
+
+ #if defined (HAVE_UNISTD_H)
+ #  include <unistd.h>
+@@ -100,6 +104,60 @@
+
+ /* **************************************************************** */
+ /*                                                                  */
++/*           busyq applet execution                                 */
++/*                                                                  */
++/* **************************************************************** */
++
++/*
++ * Execute a busyq embedded applet.
++ *
++ * Checks whether the resolved command path is the applet marker.
++ * If so, looks up the applet and either:
++ *   - Calls it directly (NOFORK applets like cat, head, tail)
++ *   - Forks and calls it in the child (regular applets like curl, jq)
++ *
++ * Returns: the exit status, or -1 if not an applet (caller should
++ * proceed with normal execution).
++ */
++static int
++busyq_execute_applet (char *command, char **args, int nargs)
++{
++  const struct busyq_applet *applet;
++  char *cmd_basename;
++  int status;
++  pid_t pid;
++
++  /* Only intercept if the resolved path is our marker */
++  if (command == NULL || strcmp (command, BUSYQ_APPLET_MARKER) != 0)
++    return -1;
++
++  /* The actual command name is in args[0] */
++  cmd_basename = args[0];
++  applet = busyq_find_applet (cmd_basename);
++  if (applet == NULL)
++    return -1;
++
++  /* Count args if nargs not provided */
++  if (nargs <= 0)
++    for (nargs = 0; args[nargs] != NULL; nargs++)
++      ;
++
++  if (applet->flags & BUSYQ_APPLET_NOFORK)
++    {
++      /* NOFORK: run directly in this process (fast path) */
++      return (applet->main_func (nargs, args));
++    }
++
++  /* Regular applet: fork and call in child */
++  pid = fork ();
++  if (pid == 0)
++    {
++      /* Child: call the applet's main and exit */
++      _exit (applet->main_func (nargs, args));
++    }
++  else if (pid < 0)
++    {
++      /* Fork failed */
++      return (EXECUTION_FAILURE);
++    }
++
++  /* Parent: wait for child */
++  waitpid (pid, &status, 0);
++  return (WIFEXITED (status) ? WEXITSTATUS (status) : 128 + WTERMSIG (status));
++}
++
++/* **************************************************************** */
++/*                                                                  */
+ /*           Executing simple commands                              */
+ /*                                                                  */
+ /* **************************************************************** */
+@@ -120,6 +178,18 @@
+
+   command = search_for_command (words->word->word, 0);
+
++  /* busyq: if the command resolved to the applet marker, execute
++   * the embedded applet instead of going through execve. */
++  if (command != NULL)
++    {
++      int applet_result = busyq_execute_applet (command, argv, argc);
++      if (applet_result >= 0)
++        {
++          last_command_exit_value = applet_result;
++          return (applet_result);
++        }
++    }
++
+   /* Normal execution path continues below... */

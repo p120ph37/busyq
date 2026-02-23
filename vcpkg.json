@@ -1,0 +1,9 @@
+{
+  "name": "busyq",
+  "version-string": "0.1.0",
+  "description": "Single-binary bash+curl+jq+busybox for distroless containers",
+  "dependencies": [
+    "mbedtls",
+    "oniguruma"
+  ]
+}
