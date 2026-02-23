@@ -1,22 +1,14 @@
 vcpkg_download_distfile(ARCHIVE
     URLS "https://busybox.net/downloads/busybox-1.37.0.tar.bz2"
     FILENAME "busybox-1.37.0.tar.bz2"
-    SHA512 0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+    SHA512 ad8fd06f082699774f990a53d7a73b189ed404fe0a2166aff13eae4d9d8ee5c9239493befe949c98801fe7897520dbff3ed0224faa7205854ce4fa975e18467e
 )
 
-vcpkg_extract_source_archive(SOURCE_PATH ARCHIVE "${ARCHIVE}")
-
-# Apply busyq patches
-vcpkg_apply_patches(
-    SOURCE_PATH "${SOURCE_PATH}"
+vcpkg_extract_source_archive(SOURCE_PATH
+    ARCHIVE "${ARCHIVE}"
     PATCHES
         remove-main.patch
 )
-
-# Copy our busybox config
-file(COPY "${CURRENT_PORT_DIR}/../../config/busybox.config"
-     DESTINATION "${SOURCE_PATH}")
-file(RENAME "${SOURCE_PATH}/busybox.config" "${SOURCE_PATH}/.config")
 
 # Get the bb_namespace.h path
 set(BB_NAMESPACE_H "${CURRENT_PORT_DIR}/../../src/bb_namespace.h")
@@ -26,52 +18,60 @@ set(BB_NAMESPACE_H "${CURRENT_PORT_DIR}/../../src/bb_namespace.h")
 set(BB_BUILD_DIR "${CURRENT_BUILDTREES_DIR}/${TARGET_TRIPLET}-rel")
 file(MAKE_DIRECTORY "${BB_BUILD_DIR}")
 
-# Copy config to build dir
-file(COPY "${SOURCE_PATH}/.config" DESTINATION "${BB_BUILD_DIR}")
+# Copy config to build dir only (source tree must stay clean for out-of-tree builds)
+file(COPY "${CURRENT_PORT_DIR}/../../config/busybox.config"
+     DESTINATION "${BB_BUILD_DIR}")
+file(RENAME "${BB_BUILD_DIR}/busybox.config" "${BB_BUILD_DIR}/.config")
 
-# Build busybox with our custom flags
+# Build busybox including its native binary (busybox_unstripped).
+# We do NOT pass -DBUSYQ_NO_BUSYBOX_MAIN here so the binary links normally.
+# The remove-main.patch only guards main() with #ifndef, so without the define
+# busybox's main() is present and the binary links fine.
+# We collect the .o files afterward to create libbusybox.a for our final link,
+# where we DO define BUSYQ_NO_BUSYBOX_MAIN to exclude busybox's main().
+# CC=cc and HOSTCC=cc because CMAKE_C_COMPILER is not set in portfile context.
 vcpkg_execute_required_process(
     COMMAND make
         -C "${SOURCE_PATH}"
         "O=${BB_BUILD_DIR}"
-        "CC=${CMAKE_C_COMPILER}"
-        "CFLAGS=-ffunction-sections -fdata-sections -Oz -DNDEBUG -include ${BB_NAMESPACE_H} -DBUSYQ_NO_BUSYBOX_MAIN"
+        "CC=cc"
+        "HOSTCC=cc"
+        "CFLAGS=-ffunction-sections -fdata-sections -Oz -DNDEBUG -include ${BB_NAMESPACE_H}"
         "LDFLAGS=-Wl,--gc-sections -static"
-        "CONFIG_PREFIX=${CURRENT_PACKAGES_DIR}"
-        -j${VCPKG_CONCURRENCY}
+        -j8
         busybox_unstripped
     WORKING_DIRECTORY "${BB_BUILD_DIR}"
     LOGNAME "build-busybox-${TARGET_TRIPLET}"
 )
 
-# busybox builds produce .o files; we need to create libbusybox.a
-# Collect all relevant .o files from the build
-file(MAKE_DIRECTORY "${CURRENT_PACKAGES_DIR}/lib")
+# Recompile appletlib.o with -DBUSYQ_NO_BUSYBOX_MAIN to exclude busybox's main()
+# from the library archive (our busyq main.c provides main()).
+vcpkg_execute_required_process(
+    COMMAND sh -c "make -C '${SOURCE_PATH}' 'O=${BB_BUILD_DIR}' CC=cc HOSTCC=cc 'CFLAGS=-ffunction-sections -fdata-sections -Oz -DNDEBUG -include ${BB_NAMESPACE_H} -DBUSYQ_NO_BUSYBOX_MAIN' libbb/appletlib.o"
+    WORKING_DIRECTORY "${BB_BUILD_DIR}"
+    LOGNAME "recompile-appletlib-${TARGET_TRIPLET}"
+)
 
-# The busybox build creates a busybox_unstripped binary.
-# With CONFIG_BUILD_LIBBUSYBOX=y, it also creates libbusybox.so
-# For static linking, we need to archive the .o files ourselves.
-file(GLOB_RECURSE BB_OBJS "${BB_BUILD_DIR}/**/*.o")
-# Filter out test objects or other non-library objects
+# Collect all .o files into libbusybox.a
+file(GLOB_RECURSE BB_OBJS "${BB_BUILD_DIR}/*.o")
 list(FILTER BB_OBJS EXCLUDE REGEX "scripts/")
-list(FILTER BB_OBJS EXCLUDE REGEX "applets/applets\\.o$")
-
-if(BB_OBJS)
-    vcpkg_execute_required_process(
-        COMMAND ar rcs "${CURRENT_PACKAGES_DIR}/lib/libbusybox.a" ${BB_OBJS}
-        WORKING_DIRECTORY "${BB_BUILD_DIR}"
-        LOGNAME "ar-libbusybox-${TARGET_TRIPLET}"
-    )
+list(LENGTH BB_OBJS BB_OBJ_COUNT)
+if(BB_OBJ_COUNT LESS 10)
+    message(FATAL_ERROR "busybox build produced only ${BB_OBJ_COUNT} .o files — build likely failed")
 endif()
 
+file(MAKE_DIRECTORY "${CURRENT_PACKAGES_DIR}/lib")
+
+vcpkg_execute_required_process(
+    COMMAND ar rcs "${CURRENT_PACKAGES_DIR}/lib/libbusybox.a" ${BB_OBJS}
+    WORKING_DIRECTORY "${BB_BUILD_DIR}"
+    LOGNAME "ar-libbusybox-${TARGET_TRIPLET}"
+)
+
 # Generate the busybox applet table header for busyq
-# This parses busybox's include/applets.h to extract enabled applet metadata
 set(APPLET_HEADER "${CURRENT_PACKAGES_DIR}/include/busybox_applets.h")
 file(MAKE_DIRECTORY "${CURRENT_PACKAGES_DIR}/include")
 
-# The generated include/applet_tables.h has the data we need, but in a
-# busybox-internal format. We generate our own BUSYQ_BB_APPLET() entries.
-# Parse the applet names from the generated applet_tables.h
 set(GEN_SCRIPT "${CURRENT_PORT_DIR}/gen_busyq_applets.sh")
 if(EXISTS "${GEN_SCRIPT}")
     vcpkg_execute_required_process(
@@ -80,7 +80,6 @@ if(EXISTS "${GEN_SCRIPT}")
         LOGNAME "gen-applets-${TARGET_TRIPLET}"
     )
 else()
-    # Fallback: generate from the preprocessed applets.h
     file(WRITE "${APPLET_HEADER}" "/* Auto-generated busybox applet table - fallback */\n")
 endif()
 

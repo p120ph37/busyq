@@ -1,16 +1,17 @@
 diff --git a/libbb/appletlib.c b/libbb/appletlib.c
-index 1111111..2222222 100644
+index d9cc484..02b39eb 100644
 --- a/libbb/appletlib.c
 +++ b/libbb/appletlib.c
-@@ -1029,6 +1029,7 @@
-
-
+@@ -1026,6 +1026,7 @@ get_script_content(unsigned n UNUSED_PARAM)
+ #endif /* defined(SINGLE_APPLET_MAIN) */
+ 
+ 
 +#ifndef BUSYQ_NO_BUSYBOX_MAIN
  #if ENABLE_BUILD_LIBBUSYBOX
  int lbb_main(char **argv)
  #else
-@@ -1131,3 +1132,4 @@ int main(int argc UNUSED_PARAM, char **argv)
-
+@@ -1129,3 +1130,4 @@ int main(int argc UNUSED_PARAM, char **argv)
+ 
  #endif
  }
 +#endif /* BUSYQ_NO_BUSYBOX_MAIN */
