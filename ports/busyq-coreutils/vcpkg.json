@@ -1,0 +1,16 @@
+{
+  "name": "busyq-coreutils",
+  "version-string": "9.5",
+  "description": "GNU coreutils built as a single-binary static library for busyq",
+  "license": "GPL-3.0-or-later",
+  "dependencies": [
+    {
+      "name": "vcpkg-cmake-get-vars",
+      "host": true
+    },
+    {
+      "name": "vcpkg-make",
+      "host": true
+    }
+  ]
+}
