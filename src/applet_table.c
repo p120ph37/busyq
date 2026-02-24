@@ -24,9 +24,15 @@ extern void run_applet_no_and_exit(int applet_no, const char *name, char **argv)
 extern int curl_main(int argc, char **argv);
 extern int jq_main(int argc, char **argv);
 
+/* Busybox applet name list (NUL-separated flat string from applet_tables.h) */
+extern const char applet_names[];
+
+static int busyq_help_main(int argc, char **argv);
+
 static const struct busyq_applet extra_applets[] = {
-    { "curl", curl_main, 0 },
-    { "jq",   jq_main,   0 },
+    { "busyq",  busyq_help_main, 0 },
+    { "curl",   curl_main, 0 },
+    { "jq",     jq_main,   0 },
 };
 static const int extra_count = sizeof(extra_applets) / sizeof(extra_applets[0]);
 
@@ -79,4 +85,50 @@ static int busybox_applet_dispatch(int argc, char **argv)
     /* Does not return — calls exit() internally */
     run_applet_no_and_exit(applet_no, argv[0], argv);
     return 127; /* unreachable */
+}
+
+/*
+ * List all available commands: busyq extras + busybox applets.
+ * Invoked as "busyq" applet (e.g. `busyq --help` or just `busyq`
+ * when called as a non-bash name).
+ */
+static int busyq_help_main(int argc, char **argv)
+{
+    const char *p;
+    int col, count;
+
+    (void)argc;
+    (void)argv;
+
+    {
+        const char hdr[] =
+            "busyq - single-binary bash+curl+jq+busybox\n\n"
+            "Built-in commands:\n"
+            "  bash, sh, curl, jq\n\n"
+            "Busybox applets:\n";
+        write(STDOUT_FILENO, hdr, sizeof(hdr) - 1);
+    }
+
+    /* Walk the NUL-separated applet_names list */
+    col = 0;
+    count = 0;
+    for (p = applet_names; *p; p += strlen(p) + 1) {
+        int len = strlen(p);
+        if (col == 0) {
+            write(STDOUT_FILENO, "  ", 2);
+            col = 2;
+        } else if (col + len + 2 > 78) {
+            write(STDOUT_FILENO, "\n  ", 3);
+            col = 2;
+        } else {
+            write(STDOUT_FILENO, ", ", 2);
+            col += 2;
+        }
+        write(STDOUT_FILENO, p, len);
+        col += len;
+        count++;
+    }
+    write(STDOUT_FILENO, "\n", 1);
+
+    return 0;
 }
