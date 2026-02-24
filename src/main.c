@@ -1,10 +1,9 @@
 /*
- * busyq - Single-binary bash+curl+jq+busybox
+ * busyq - Single-binary bash+curl+jq (+ upstream GNU tools)
  *
  * Entry point: normally launches bash.  However, when re-exec'd via
- * /proc/self/exe with argv[0] set to an applet name (as busybox does
- * internally, e.g. wget forking ssl_client), we dispatch to the applet
- * instead of starting bash.
+ * /proc/self/exe with argv[0] set to an applet name (e.g. curl needing
+ * ssl_client), we dispatch to the applet instead of starting bash.
  *
  * Bash's own argv[0] semantics are preserved: "sh" enters POSIX mode,
  * "bash" / "busyq" / anything unrecognised falls through to bash.
@@ -29,7 +28,7 @@ int main(int argc, char **argv)
 
     /*
      * If argv[0] looks like an applet (not bash/sh/busyq), dispatch it.
-     * This handles the case where busybox internally does:
+     * This handles the case where a tool internally does:
      *   execv("/proc/self/exe", {"ssl_client", "-s", "5", NULL});
      */
     if (strcmp(name, "bash") != 0 &&

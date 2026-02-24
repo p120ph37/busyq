@@ -1,10 +1,9 @@
 {
   "name": "busyq",
   "version-string": "0.1.0",
-  "description": "Single-binary bash+curl+jq+busybox for distroless containers",
+  "description": "Single-binary bash+curl+jq for distroless containers",
   "dependencies": [
     "busyq-bash",
-    "busyq-busybox",
     "busyq-jq",
     "ncurses",
     "oniguruma",

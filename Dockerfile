@@ -40,7 +40,7 @@ COPY . /src
 WORKDIR /src
 
 # ---- Build variant 1: no SSL ----
-# Install all overlay port dependencies (bash, busybox, curl-nossl, jq)
+# Install all overlay port dependencies (bash, curl-nossl, jq)
 RUN vcpkg install
 
 # Build the busyq binary
@@ -80,7 +80,6 @@ FROM alpine:latest AS test
 COPY --from=build /src/out/busyq /busyq
 COPY --from=build /src/out/busyq-ssl /busyq-ssl
 RUN /busyq -c 'echo "bash: ok"' \
-    && /busyq -c 'type ls && ls /' > /dev/null \
     && /busyq -c 'jq -n "{test: true}"' \
     && /busyq -c 'curl --version' > /dev/null \
     && /busyq-ssl -c 'curl --version' | grep -qi tls \
