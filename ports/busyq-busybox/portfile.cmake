@@ -4,11 +4,7 @@ vcpkg_download_distfile(ARCHIVE
     SHA512 ad8fd06f082699774f990a53d7a73b189ed404fe0a2166aff13eae4d9d8ee5c9239493befe949c98801fe7897520dbff3ed0224faa7205854ce4fa975e18467e
 )
 
-vcpkg_extract_source_archive(SOURCE_PATH
-    ARCHIVE "${ARCHIVE}"
-    PATCHES
-        remove-main.patch
-)
+vcpkg_extract_source_archive(SOURCE_PATH ARCHIVE "${ARCHIVE}")
 
 # Get the bb_namespace.h path
 set(BB_NAMESPACE_H "${CURRENT_PORT_DIR}/../../src/bb_namespace.h")
@@ -24,11 +20,9 @@ file(COPY "${CURRENT_PORT_DIR}/../../config/busybox.config"
 file(RENAME "${BB_BUILD_DIR}/busybox.config" "${BB_BUILD_DIR}/.config")
 
 # Build busybox including its native binary (busybox_unstripped).
-# We do NOT pass -DBUSYQ_NO_BUSYBOX_MAIN here so the binary links normally.
-# The remove-main.patch only guards main() with #ifndef, so without the define
-# busybox's main() is present and the binary links fine.
-# We collect the .o files afterward to create libbusybox.a for our final link,
-# where we DO define BUSYQ_NO_BUSYBOX_MAIN to exclude busybox's main().
+# We do NOT pass -Dmain=busybox_main here so the binary links normally with
+# its own main().  We collect the .o files afterward to create libbusybox.a
+# for our final link, where we recompile appletlib.o with -Dmain=busybox_main.
 # CC=cc and HOSTCC=cc because CMAKE_C_COMPILER is not set in portfile context.
 vcpkg_execute_required_process(
     COMMAND make
@@ -44,10 +38,12 @@ vcpkg_execute_required_process(
     LOGNAME "build-busybox-${TARGET_TRIPLET}"
 )
 
-# Recompile appletlib.o with -DBUSYQ_NO_BUSYBOX_MAIN to exclude busybox's main()
-# from the library archive (our busyq main.c provides main()).
+# Recompile appletlib.o with -Dmain=bb_entry_main so busybox's main() is
+# available as bb_entry_main() — just like bash_main, curl_main, jq_main.
+# We use bb_entry_main (not busybox_main) because busybox already has a
+# busybox_main() function for the "busybox" applet itself.
 vcpkg_execute_required_process(
-    COMMAND sh -c "make -C '${SOURCE_PATH}' 'O=${BB_BUILD_DIR}' CC=cc HOSTCC=cc 'CFLAGS=-ffunction-sections -fdata-sections -Oz -DNDEBUG -include ${BB_NAMESPACE_H} -DBUSYQ_NO_BUSYBOX_MAIN' libbb/appletlib.o"
+    COMMAND sh -c "make -C '${SOURCE_PATH}' 'O=${BB_BUILD_DIR}' CC=cc HOSTCC=cc 'CFLAGS=-ffunction-sections -fdata-sections -Oz -DNDEBUG -include ${BB_NAMESPACE_H} -Dmain=bb_entry_main' libbb/appletlib.o"
     WORKING_DIRECTORY "${BB_BUILD_DIR}"
     LOGNAME "recompile-appletlib-${TARGET_TRIPLET}"
 )

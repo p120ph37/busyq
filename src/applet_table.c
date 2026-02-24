@@ -1,33 +1,34 @@
 /*
  * applet_table.c - Applet dispatch for busyq
  *
- * Combines busybox's own applet registry with curl and jq entries.
- * Busybox applets are looked up via find_applet_by_name() from libbb,
- * which is always in sync with the compiled-in applets — no generated
- * header needed.
+ * All four embedded tools are treated uniformly: each has a renamed
+ * main() that we call from the forked child process in shell_execve().
+ *   bash     → bash_main(argc, argv)     [always the entry point]
+ *   busybox  → busybox_main(argc, argv)  [multiplexes on argv[0]]
+ *   curl     → curl_main(argc, argv)
+ *   jq       → jq_main(argc, argv)
+ *
+ * Busybox applets are detected via find_applet_by_name() from libbb.
+ * When found, we dispatch through busybox_main() so busybox performs
+ * its own initialization (bb_errno, locale, --help, SUID checks) and
+ * applet dispatch, exactly as if execve'd on a busybox symlink.
  */
 
 #include "applet_table.h"
 #include <string.h>
-#include <stdlib.h>
 #include <unistd.h>
-#include <sys/wait.h>
 
 /* Busybox applet lookup (from libbb) */
 extern int find_applet_by_name(const char *name);
-/* Busybox runtime initialization (sets bb_errno, applet_name, etc.) */
-extern void lbb_prepare(const char *applet);
-/* Busybox applet function pointer table (from applet_tables.h) */
-extern int (*const applet_main[])(int argc, char **argv);
-/* Busybox global applet name pointer (used by error reporting) */
-extern const char *applet_name;
+/* Busybox entry point (renamed from main via -Dmain=bb_entry_main).
+ * Dispatches based on argv[0], performing full busybox initialization. */
+extern int bb_entry_main(int argc, char **argv);
+/* Busybox applet name list (NUL-separated flat string from applet_tables.h) */
+extern const char applet_names[];
 
 /* External tool entry points */
 extern int curl_main(int argc, char **argv);
 extern int jq_main(int argc, char **argv);
-
-/* Busybox applet name list (NUL-separated flat string from applet_tables.h) */
-extern const char applet_names[];
 
 static int busyq_help_main(int argc, char **argv);
 
@@ -39,12 +40,12 @@ static const struct busyq_applet extra_applets[] = {
 static const int extra_count = sizeof(extra_applets) / sizeof(extra_applets[0]);
 
 /*
- * Sentinel entry returned for busybox applets.  The main_func is a
- * wrapper that forks and calls run_applet_no_and_exit().
+ * Sentinel entry returned for busybox applets.  Calls bb_entry_main()
+ * (busybox's renamed main) which dispatches based on argv[0], just as
+ * if invoked via execve on a busybox symlink.
  */
-static int busybox_applet_dispatch(int argc, char **argv);
 static const struct busyq_applet bb_sentinel = {
-    "busybox", busybox_applet_dispatch, 0
+    "busybox", bb_entry_main, 0
 };
 
 const struct busyq_applet *busyq_find_applet(const char *name)
@@ -62,32 +63,6 @@ const struct busyq_applet *busyq_find_applet(const char *name)
         return &bb_sentinel;
 
     return NULL;
-}
-
-/*
- * Dispatch a busybox applet.  This is called from a forked child
- * (execute_cmd.c forks for non-NOFORK applets).  We call the applet's
- * main function directly via applet_main[] rather than using
- * run_applet_no_and_exit(), because the latter calls exit() which runs
- * bash's atexit handlers in the child and corrupts state.  The caller
- * in execute_cmd.c wraps this in _exit().
- */
-static int busybox_applet_dispatch(int argc, char **argv)
-{
-    int applet_no;
-
-    if (!argv || !argv[0])
-        return -1;
-
-    applet_no = find_applet_by_name(argv[0]);
-    if (applet_no < 0)
-        return -1;
-
-    /* Initialize busybox runtime (sets bb_errno, applet_name) */
-    lbb_prepare(argv[0]);
-    applet_name = argv[0];
-
-    return applet_main[applet_no](argc, argv);
 }
 
 /*
