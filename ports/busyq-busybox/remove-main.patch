@@ -1,6 +1,0 @@
-This patch file is intentionally empty.
-
-Busybox's main() is renamed to busybox_main() via -Dmain=busybox_main in
-CFLAGS during the recompilation step, matching the approach used for bash
-(-Dmain=bash_main), curl (-Dmain=curl_main), and jq (-Dmain=jq_main).
-No source modification is needed.

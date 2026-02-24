@@ -1,11 +1,12 @@
 cmake_minimum_required(VERSION 3.20)
 project(busyq C)
 
-# busyq - Single-binary bash+curl+jq+busybox
+# busyq - Single-binary bash+curl+jq (+ upstream GNU tools)
 #
 # This CMakeLists.txt compiles the busyq entry point and applet table,
 # then links everything together with the static libraries produced by
-# the vcpkg overlay ports (busyq-bash, busyq-busybox, busyq-curl, busyq-jq).
+# the vcpkg overlay ports (busyq-bash, busyq-curl, busyq-jq, and
+# future upstream tool ports).
 
 set(CMAKE_C_STANDARD 11)
 
@@ -34,7 +35,7 @@ target_include_directories(busyq PRIVATE
 # --- Link order matters for static libraries ---
 # bash depends on readline, which depends on ncurses
 # The overall link order: bash > builtins > readline > history > glob > tilde > sh >
-#   busybox > curl > nghttp2 > zlib > brotli > zstd > jq > oniguruma > ncurses > [mbedtls] > system
+#   curl > nghttp2 > zlib > brotli > zstd > jq > oniguruma > ncurses > [mbedtls] > system
 
 set(BUSYQ_LINK_LIBS "")
 
@@ -46,9 +47,6 @@ find_library(LIB_HISTORY history PATHS "${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_T
 find_library(LIB_GLOB glob PATHS "${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/lib" NO_DEFAULT_PATH)
 find_library(LIB_TILDE tilde PATHS "${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/lib" NO_DEFAULT_PATH)
 find_library(LIB_SH sh PATHS "${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/lib" NO_DEFAULT_PATH)
-
-# Busybox
-find_library(LIB_BUSYBOX busybox PATHS "${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/lib" NO_DEFAULT_PATH)
 
 # Curl (library + tool main)
 find_library(LIB_CURL curl PATHS "${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/lib" NO_DEFAULT_PATH)
@@ -98,11 +96,6 @@ if(LIB_SH)
     list(APPEND BUSYQ_LINK_LIBS ${LIB_SH})
 endif()
 
-# Busybox
-if(LIB_BUSYBOX)
-    list(APPEND BUSYQ_LINK_LIBS ${LIB_BUSYBOX})
-endif()
-
 # Curl
 if(LIB_CURLMAIN)
     list(APPEND BUSYQ_LINK_LIBS ${LIB_CURLMAIN})
@@ -146,7 +139,7 @@ if(LIB_NCURSES)
     list(APPEND BUSYQ_LINK_LIBS ${LIB_NCURSES})
 endif()
 
-# SSL: mbedtls libraries + ssl_client applet (shared TLS for curl and busybox)
+# SSL: mbedtls libraries + ssl_client applet
 if(BUSYQ_SSL)
     target_sources(busyq PRIVATE src/ssl_client_mbedtls.c)
     target_compile_definitions(busyq PRIVATE BUSYQ_SSL)
