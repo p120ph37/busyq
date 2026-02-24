@@ -103,8 +103,14 @@ dev-start() {
     done
 
     echo "dev-container: starting container '${DEV_CONTAINER_NAME}'..."
+    # Use --network=host so the container shares the host's network stack.
+    # This is required in sandbox environments where dockerd runs with
+    # --bridge=none (no virtual bridge), which makes container-private
+    # networking unreachable. With host networking, the container inherits
+    # the host's proxy settings and CA certificates automatically.
     docker run -d \
         --name "${DEV_CONTAINER_NAME}" \
+        --network=host \
         "${proxy_args[@]}" \
         -v "${PROJECT_DIR}:/src" \
         -w /src \

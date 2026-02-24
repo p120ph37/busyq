@@ -58,15 +58,18 @@ with the project directory bind-mounted at `/src`. It handles:
 - Starting dockerd with sandbox-compatible flags (no iptables/bridge/overlayfs)
 - Forwarding proxy environment variables into the container
 - Extracting and installing TLS-intercepting proxy CA certificates
-- Installing build dependencies (bison, flex, ncurses-dev, etc.)
+- Installing build dependencies (bison, flex, linux-headers, perl)
+- Using `--network=host` so the container shares the host network stack
+  (required when dockerd runs with `--bridge=none`)
 
 ### Manual usage (without the script)
 ```sh
 # Start dockerd (sandbox environments only)
 dockerd --iptables=false --ip6tables=false --bridge=none --storage-driver=vfs &
 
-# Launch container
+# Launch container (--network=host is required when using --bridge=none)
 docker run -d --name busyq-dev \
+  --network=host \
   -e "http_proxy=$http_proxy" -e "https_proxy=$https_proxy" \
   -v "$(pwd):/src" -w /src \
   p120ph37/alpine-clang-vcpkg:latest sleep infinity
