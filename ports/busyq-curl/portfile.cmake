@@ -79,14 +79,30 @@ vcpkg_cmake_configure(
         ENABLE_MANUAL
 )
 
-vcpkg_cmake_build()
+# Save curl_config.h (generated during cmake configure) to a stable location
+# before vcpkg_cmake_build() runs, because newer vcpkg cleans build tree artifacts
+# after the build+install step completes.
+set(CURLMAIN_BUILD_DIR "${CURRENT_BUILDTREES_DIR}/${TARGET_TRIPLET}-rel-curlmain")
+file(MAKE_DIRECTORY "${CURLMAIN_BUILD_DIR}")
+file(COPY
+    "${CURRENT_BUILDTREES_DIR}/${TARGET_TRIPLET}-rel/lib/curl_config.h"
+    DESTINATION "${CURLMAIN_BUILD_DIR}"
+)
 
-# Install libcurl
-file(GLOB CURL_STATIC_LIB "${CURRENT_BUILDTREES_DIR}/${TARGET_TRIPLET}-rel/lib/libcurl.a")
-if(NOT CURL_STATIC_LIB)
-    file(GLOB CURL_STATIC_LIB "${CURRENT_BUILDTREES_DIR}/${TARGET_TRIPLET}-rel/lib/libcurl-d.a")
+vcpkg_cmake_build()
+vcpkg_cmake_install()
+
+# Install libcurl from packages dir (vcpkg_cmake_install puts it there)
+# Also handle case where it didn't install automatically
+if(NOT EXISTS "${CURRENT_PACKAGES_DIR}/lib/libcurl.a")
+    file(GLOB CURL_STATIC_LIB
+        "${CURRENT_BUILDTREES_DIR}/${TARGET_TRIPLET}-rel/lib/libcurl.a"
+        "${CURRENT_BUILDTREES_DIR}/${TARGET_TRIPLET}-rel/lib/libcurl-d.a"
+    )
+    if(CURL_STATIC_LIB)
+        file(INSTALL ${CURL_STATIC_LIB} DESTINATION "${CURRENT_PACKAGES_DIR}/lib")
+    endif()
 endif()
-file(INSTALL ${CURL_STATIC_LIB} DESTINATION "${CURRENT_PACKAGES_DIR}/lib")
 
 # Detect toolchain flags so the ad-hoc curlmain compilation gets LTO, -Oz, etc.
 vcpkg_cmake_get_vars(cmake_vars_file)
@@ -96,11 +112,8 @@ set(CURLMAIN_CC "${VCPKG_DETECTED_CMAKE_C_COMPILER}")
 set(CURLMAIN_CFLAGS "${VCPKG_DETECTED_CMAKE_C_FLAGS} ${VCPKG_DETECTED_CMAKE_C_FLAGS_RELEASE}")
 
 # Build curl tool source files with -Dmain=curl_main into libcurlmain.a
-# We compile them via shell since CMAKE_C_COMPILER is not set in portfile context
-set(CURLMAIN_BUILD_DIR "${CURRENT_BUILDTREES_DIR}/${TARGET_TRIPLET}-rel-curlmain")
-file(MAKE_DIRECTORY "${CURLMAIN_BUILD_DIR}")
-
-set(CURL_BUILD_REL "${CURRENT_BUILDTREES_DIR}/${TARGET_TRIPLET}-rel")
+# We compile them via shell since CMAKE_C_COMPILER is not set in portfile context.
+# curl_config.h was saved to CURLMAIN_BUILD_DIR before the build tree was cleaned.
 
 # Write a build script for curl tool objects to avoid quoting issues in sh -c.
 # Only tool_main.c gets -Dmain=curl_main; other files are compiled normally.
@@ -111,7 +124,7 @@ SRCDIR=\"${SOURCE_PATH}/src\"
 CC=\"${CURLMAIN_CC}\"
 TOOLCHAIN_CFLAGS=\"${CURLMAIN_CFLAGS}\"
 BASE_CFLAGS=\"-DHAVE_CONFIG_H -DCURL_STATICLIB\"
-INCS=\"-include ${CURL_BUILD_REL}/lib/curl_config.h -I${SOURCE_PATH}/include -I${SOURCE_PATH}/lib -I${SOURCE_PATH}/src -I${CURL_BUILD_REL}/lib -I${CURL_BUILD_REL}/include -I${CURRENT_INSTALLED_DIR}/include\"
+INCS=\"-include ${CURLMAIN_BUILD_DIR}/curl_config.h -I${SOURCE_PATH}/include -I${SOURCE_PATH}/lib -I${SOURCE_PATH}/src -I${CURLMAIN_BUILD_DIR} -I${CURRENT_INSTALLED_DIR}/include\"
 for f in \"\$SRCDIR\"/*.c \"\$SRCDIR\"/toolx/*.c; do
     [ -f \"\$f\" ] || continue
     bn=\$(basename \"\$f\" .c)
@@ -132,6 +145,14 @@ vcpkg_execute_required_process(
 
 # Install headers
 file(INSTALL "${SOURCE_PATH}/include/curl" DESTINATION "${CURRENT_PACKAGES_DIR}/include")
+
+# Clean up extra files vcpkg_cmake_install may have placed
+file(REMOVE_RECURSE
+    "${CURRENT_PACKAGES_DIR}/debug"
+    "${CURRENT_PACKAGES_DIR}/bin"
+    "${CURRENT_PACKAGES_DIR}/lib/cmake"
+    "${CURRENT_PACKAGES_DIR}/lib/pkgconfig"
+)
 
 # Install copyright
 vcpkg_install_copyright(FILE_LIST "${SOURCE_PATH}/COPYING")

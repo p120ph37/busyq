@@ -6,6 +6,16 @@ vcpkg_download_distfile(ARCHIVE
 
 vcpkg_extract_source_archive(SOURCE_PATH ARCHIVE "${ARCHIVE}")
 
+# Detect toolchain flags FIRST, before autotools configure claims the build
+# directory. vcpkg_cmake_get_vars creates a temporary cmake project in the
+# build tree dir; running it early prevents it from clobbering autotools
+# artifacts (config.h, version.h, libjq.a) that we need later.
+vcpkg_cmake_get_vars(cmake_vars_file)
+include("${cmake_vars_file}")
+
+set(JQ_CC "${VCPKG_DETECTED_CMAKE_C_COMPILER}")
+set(JQ_CFLAGS "${VCPKG_DETECTED_CMAKE_C_FLAGS} ${VCPKG_DETECTED_CMAKE_C_FLAGS_RELEASE}")
+
 # jq uses autotools.
 # We do NOT pass -Dmain=jq_main in CFLAGS here because that breaks
 # configure's "C compiler works" test. Instead we compile jq's main.c
@@ -14,7 +24,9 @@ vcpkg_extract_source_archive(SOURCE_PATH ARCHIVE "${ARCHIVE}")
 # but prevent yyerror/yyparse/yylex from colliding with bash's parser.
 # Use VCPKG_C_FLAGS to append flags (preserving toolchain LTO/optimization)
 # instead of overriding CFLAGS in OPTIONS which would discard them.
+# vcpkg requires both C and CXX flags to be set together
 string(APPEND VCPKG_C_FLAGS " -Dyyerror=jq_yyerror -Dyyparse=jq_yyparse")
+string(APPEND VCPKG_CXX_FLAGS " -Dyyerror=jq_yyerror -Dyyparse=jq_yyparse")
 
 vcpkg_configure_make(
     SOURCE_PATH "${SOURCE_PATH}"
@@ -38,16 +50,10 @@ file(GLOB JQ_STATIC_LIB
 file(MAKE_DIRECTORY "${CURRENT_PACKAGES_DIR}/lib")
 file(INSTALL ${JQ_STATIC_LIB} DESTINATION "${CURRENT_PACKAGES_DIR}/lib")
 
-# Detect toolchain flags so the ad-hoc jqmain compilation gets LTO, -Oz, etc.
-vcpkg_cmake_get_vars(cmake_vars_file)
-include("${cmake_vars_file}")
-
-set(JQ_CC "${VCPKG_DETECTED_CMAKE_C_COMPILER}")
-set(JQ_CFLAGS "${VCPKG_DETECTED_CMAKE_C_FLAGS} ${VCPKG_DETECTED_CMAKE_C_FLAGS_RELEASE}")
-
-# Build jq's main.c separately with -Dmain=jq_main to create libjqmain.a
+# Build jq's main.c separately with -Dmain=jq_main to create libjqmain.a.
+# The autotools build dir still has config.h and version.h at this point.
 vcpkg_execute_required_process(
-    COMMAND sh -c "'${JQ_CC}' ${JQ_CFLAGS} -Dmain=jq_main -DHAVE_CONFIG_H -I'${JQ_BUILD_REL}' -I'${SOURCE_PATH}/src' -I'${CURRENT_INSTALLED_DIR}/include' -c '${SOURCE_PATH}/src/main.c' -o '${JQ_BUILD_REL}/jq_main.o'"
+    COMMAND sh -c "'${JQ_CC}' ${JQ_CFLAGS} -Dmain=jq_main -DHAVE_CONFIG_H -I'${JQ_BUILD_REL}' -I'${JQ_BUILD_REL}/src' -I'${SOURCE_PATH}' -I'${SOURCE_PATH}/src' -I'${CURRENT_INSTALLED_DIR}/include' -c '${SOURCE_PATH}/src/main.c' -o '${JQ_BUILD_REL}/jq_main.o'"
     WORKING_DIRECTORY "${JQ_BUILD_REL}"
     LOGNAME "compile-jqmain-${TARGET_TRIPLET}"
 )
