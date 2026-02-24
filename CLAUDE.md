@@ -1,15 +1,14 @@
 # busyq - Development Context
 
 ## What this is
-A single static binary combining GNU bash + curl + jq + upstream GNU tools.
-Intended for distroless containers and script shebangs. Always launches as
-bash, with curl + jq + bundled tools available as pseudo-builtins.
+A single static binary combining GNU bash + curl + jq + GNU coreutils +
+upstream GNU tools. Intended for distroless containers and script shebangs.
+Always launches as bash, with all bundled tools available as pseudo-builtins.
 
 ## Project layout
 - `src/` - C source for entry point and applet table
-- `ports/` - vcpkg overlay ports for bash, curl, jq (and future upstream tools)
-- `scripts/` - Helper scripts (cert generation)
-- `patches/` - Legacy patches (superseded by ports/*/patches)
+- `ports/` - vcpkg overlay ports (bash, curl, jq, coreutils, future tools)
+- `scripts/` - Helper scripts (cert generation, dev container)
 - `CMakeLists.txt` - Final link step
 - `Dockerfile` - Multi-stage build (uses p120ph37/alpine-clang-vcpkg)
 - `PLAN.md` - Roadmap for adding upstream GNU tool replacements
@@ -23,6 +22,7 @@ Produces `out/busyq` (no SSL) and `out/busyq-ssl` (with mbedtls).
 ### Build architecture (vcpkg overlay ports)
 Each component is a vcpkg overlay port in `ports/`:
 - `ports/busyq-bash/` - Builds bash 5.3 as static libraries
+- `ports/busyq-coreutils/` - Builds GNU coreutils 9.5 as static library
 - `ports/busyq-curl/` - Builds curl 8.18.0 (with optional SSL feature)
 - `ports/busyq-jq/` - Builds jq 1.8.1 as static library
 
@@ -31,12 +31,29 @@ vcpkg handles dependency resolution, source downloading, patch application,
 and build orchestration. The top-level CMakeLists.txt links everything together.
 
 ## Architecture decisions
-- vcpkg overlay ports for each component (bash, curl, jq, + future tools)
-- Symbol collisions between packages resolved via objcopy --prefix-symbols
+- vcpkg overlay ports for each component (bash, curl, jq, coreutils, etc.)
 - Bash command lookup patched in findcmd.c to check applet table before PATH
 - Entry point always calls bash_main(); bash's own sh/POSIX-mode logic preserved
 - Tool main() functions renamed via -Dmain=toolname_main at compile time
 - All tools registered in src/applet_table.c as {name, main_func} entries
+- Multi-call packages (coreutils) use one dispatch entry point that routes on argv[0]
+
+### Symbol isolation (critical for multi-package linking)
+Multiple GNU packages embed gnulib, causing symbol collisions (xmalloc,
+hash_insert, yyparse, etc.) when statically linked into one binary. Each
+package's portfile resolves this:
+
+1. `ld -r --whole-archive libfoo_raw.a -o foo_combined.o` — combine all
+   objects into one relocatable file (resolves internal dupes)
+2. `nm -u foo_combined.o` — record undefined symbols (libc, pthreads, etc.)
+3. `objcopy --prefix-symbols=foo_` — namespace all symbols
+4. `objcopy --redefine-syms=unprefix.map` — unprefix the external deps
+   (so libc calls work) and rename `foo_main` → `toolname_main`
+5. Package into `libfoo.a`
+
+This pattern is implemented in `ports/busyq-coreutils/portfile.cmake` and
+should be reused for all future packages that embed gnulib (gawk, sed, grep,
+findutils, diffutils, etc.).
 
 ## Iterative development with Docker
 
@@ -58,7 +75,9 @@ with the project directory bind-mounted at `/src`. It handles:
 - Starting dockerd with sandbox-compatible flags (no iptables/bridge/overlayfs)
 - Forwarding proxy environment variables into the container
 - Extracting and installing TLS-intercepting proxy CA certificates
-- Installing build dependencies (bison, flex, linux-headers, perl)
+- Fixing DNS resolution inside the container (adds `nameserver 8.8.8.8`)
+- Telling vcpkg to use the system curl (`VCPKG_FORCE_SYSTEM_BINARIES=1`)
+- Installing build dependencies (bison, flex, linux-headers, perl, xz)
 - Using `--network=host` so the container shares the host network stack
   (required when dockerd runs with `--bridge=none`)
 
@@ -74,19 +93,52 @@ docker run -d --name busyq-dev \
   -v "$(pwd):/src" -w /src \
   p120ph37/alpine-clang-vcpkg:latest sleep infinity
 
-# Run commands
-docker exec -w /src busyq-dev vcpkg install
+# Fix DNS (sandbox environments may have empty /etc/resolv.conf)
+docker exec busyq-dev sh -c 'grep -q nameserver /etc/resolv.conf || echo "nameserver 8.8.8.8" > /etc/resolv.conf'
+
+# Install proxy CA (required for TLS-intercepting proxies)
+# See install_proxy_ca() in dev-container.sh for automated extraction
+docker exec busyq-dev mkdir -p /usr/local/share/ca-certificates
+docker cp /tmp/proxy-ca.pem busyq-dev:/usr/local/share/ca-certificates/proxy-ca.crt
+docker exec busyq-dev sh -c 'cat /usr/local/share/ca-certificates/proxy-ca.crt >> /etc/ssl/certs/ca-certificates.crt'
+
+# Install build deps
+docker exec busyq-dev apk add --no-cache bison flex linux-headers perl xz
+
+# Build (VCPKG_FORCE_SYSTEM_BINARIES makes vcpkg use system curl which
+# respects proxy env vars; vcpkg's bundled curl does not)
+docker exec -e VCPKG_FORCE_SYSTEM_BINARIES=1 \
+  -e "http_proxy=$http_proxy" -e "https_proxy=$https_proxy" \
+  -w /src busyq-dev vcpkg install
 docker exec -w /src busyq-dev cmake -B build -S . -DBUSYQ_SSL=OFF \
   -D_VCPKG_INSTALLED_DIR=/src/vcpkg_installed -DVCPKG_TARGET_TRIPLET=x64-linux
 docker exec -w /src busyq-dev cmake --build build
 
 # Test
-docker exec -w /src busyq-dev ./build/busyq -c 'echo hello'
+docker exec -w /src busyq-dev ./build/busyq -c 'echo hello && ls / && date +%s'
 ```
 
-### Proxy CA certificates
-In environments with TLS-intercepting proxies (like Claude Code web), the
-container needs the proxy CA installed before `apk add` or `vcpkg install`
-will work. The `dev-container.sh` script handles this automatically. For
-manual setup, extract the CA from `/etc/ssl/certs/ca-certificates.crt` on
-the host and append it to the same file inside the container.
+### Proxy and DNS troubleshooting
+In sandbox environments (like Claude Code web), three things must be set up
+for network access inside the container:
+
+1. **`--network=host`** — Required when dockerd runs with `--bridge=none`.
+   Without this, the container has no network connectivity at all.
+
+2. **Proxy CA certificate** — The TLS-intercepting proxy's CA must be
+   appended to `/etc/ssl/certs/ca-certificates.crt` inside the container.
+   Without this, `apk add` and `curl` get TLS verification errors.
+   The `dev-container.sh` script extracts the CA automatically by scanning
+   the host trust store for certificates with "sandbox-egress" or
+   "TLS Inspection" in the subject.
+
+3. **DNS resolver** — Docker may generate an empty `/etc/resolv.conf`
+   inside the container. Add `nameserver 8.8.8.8` if DNS resolution fails.
+
+4. **`VCPKG_FORCE_SYSTEM_BINARIES=1`** — vcpkg bundles its own curl
+   binary which does NOT respect `http_proxy`/`https_proxy` env vars.
+   Setting this env var makes vcpkg use the system curl instead, which
+   does respect proxy settings. Without this, `vcpkg install` fails to
+   download source tarballs.
+
+The `dev-container.sh` script handles all four of these automatically.
