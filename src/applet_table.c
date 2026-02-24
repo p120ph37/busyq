@@ -17,8 +17,10 @@
 extern int find_applet_by_name(const char *name);
 /* Busybox runtime initialization (sets bb_errno, applet_name, etc.) */
 extern void lbb_prepare(const char *applet);
-/* Busybox applet execution — does not return, calls exit() */
-extern void run_applet_no_and_exit(int applet_no, const char *name, char **argv);
+/* Busybox applet function pointer table (from applet_tables.h) */
+extern int (*const applet_main[])(int argc, char **argv);
+/* Busybox global applet name pointer (used by error reporting) */
+extern const char *applet_name;
 
 /* External tool entry points */
 extern int curl_main(int argc, char **argv);
@@ -64,14 +66,16 @@ const struct busyq_applet *busyq_find_applet(const char *name)
 
 /*
  * Dispatch a busybox applet.  This is called from a forked child
- * (execute_cmd.c forks for non-NOFORK applets), so we can call
- * run_applet_no_and_exit() which calls exit() and never returns.
+ * (execute_cmd.c forks for non-NOFORK applets).  We call the applet's
+ * main function directly via applet_main[] rather than using
+ * run_applet_no_and_exit(), because the latter calls exit() which runs
+ * bash's atexit handlers in the child and corrupts state.  The caller
+ * in execute_cmd.c wraps this in _exit().
  */
 static int busybox_applet_dispatch(int argc, char **argv)
 {
     int applet_no;
 
-    (void)argc;
     if (!argv || !argv[0])
         return -1;
 
@@ -81,10 +85,9 @@ static int busybox_applet_dispatch(int argc, char **argv)
 
     /* Initialize busybox runtime (sets bb_errno, applet_name) */
     lbb_prepare(argv[0]);
+    applet_name = argv[0];
 
-    /* Does not return — calls exit() internally */
-    run_applet_no_and_exit(applet_no, argv[0], argv);
-    return 127; /* unreachable */
+    return applet_main[applet_no](argc, argv);
 }
 
 /*

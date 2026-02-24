@@ -1,113 +1,46 @@
 diff --git a/execute_cmd.c b/execute_cmd.c
-index 070f511..2e38a46 100644
+index 070f511..a1b3c4e 100644
 --- a/execute_cmd.c
 +++ b/execute_cmd.c
-@@ -80,6 +80,10 @@ extern int errno;
+@@ -80,6 +80,9 @@ extern int errno;
  #include "pathexp.h"
  #include "hashcmd.h"
- 
+
 +/* busyq: applet table for embedded command dispatch */
 +#include "busyq_applet_table.h"
-+#include <sys/wait.h>
 +
  #if defined (COND_COMMAND)
  #  include "test.h"
  #endif
-@@ -94,6 +98,78 @@ extern int errno;
- 
- #include "input.h"
- 
+@@ -6126,6 +6129,31 @@ shell_execve (char *command, char **args, char **env)
+   int i, fd, sample_len;
+   char sample[HASH_BANG_BUFSIZ];
+   size_t larray;
 +
-+/* busyq: Execute an embedded applet if the command name matches one.
-+ *
-+ * For NOFORK applets, call the main function directly in-process.
-+ * For regular applets, fork a child and call the main function there.
-+ *
-+ * Returns the exit status if an applet was executed, or -1 if the
-+ * command is not an applet. */
-+static int
-+busyq_execute_applet (WORD_LIST *words)
-+{
-+  char *command;
-+  const struct busyq_applet *applet;
-+  char **argv;
-+  int argc, status;
-+  WORD_LIST *w;
-+
-+  if (!words || !words->word)
-+    return -1;
-+
-+  command = words->word->word;
-+  if (!command)
-+    return -1;
-+
-+  applet = busyq_find_applet (command);
-+  if (!applet)
-+    return -1;
-+
-+  /* Build argc/argv from word list */
-+  argc = 0;
-+  for (w = words; w; w = w->next)
-+    argc++;
-+  argv = (char **)xmalloc ((argc + 1) * sizeof (char *));
-+  argc = 0;
-+  for (w = words; w; w = w->next)
-+    argv[argc++] = w->word->word;
-+  argv[argc] = (char *)NULL;
-+
-+  if (applet->flags & BUSYQ_APPLET_NOFORK)
-+    {
-+      /* NOFORK: run directly in-process */
-+      status = applet->main_func (argc, argv);
-+      free (argv);
-+      return status;
-+    }
-+  else
-+    {
-+      /* Fork and run in child */
-+      pid_t pid = fork ();
-+      if (pid == 0)
-+        {
-+          /* Child */
-+          _exit (applet->main_func (argc, argv));
-+        }
-+      else if (pid > 0)
-+        {
-+          int wstatus;
-+          waitpid (pid, &wstatus, 0);
-+          free (argv);
-+          if (WIFEXITED (wstatus))
-+            return WEXITSTATUS (wstatus);
-+          return 128 + WTERMSIG (wstatus);
-+        }
-+      else
-+        {
-+          /* Fork failed, try in-process as fallback */
-+          status = applet->main_func (argc, argv);
-+          free (argv);
-+          return status;
-+        }
-+    }
-+}
- #if defined (ALIAS)
- #  include "alias.h"
- #endif
-@@ -4935,6 +5011,18 @@ execute_from_filesystem:
-     ;	/* can't turn off nofork here, too many processes have the FIFOs open */
- #endif
- #endif
-+
-+  /* busyq: check if this is an embedded applet before execute_disk_command */
++  /* busyq: If the command resolves to an embedded applet, dispatch it
++   * directly instead of calling execve().  At this point we are already
++   * inside the forked child created by execute_disk_command() via
++   * make_child(), so bash has set up pipes, redirections, signals, and
++   * job control.  We call the applet's main function and then _exit()
++   * to terminate the child, just as a successful execve() would replace
++   * the process.  fflush(NULL) ensures buffered output is written since
++   * _exit() does not run atexit handlers or flush stdio. */
 +  {
-+    int applet_result = busyq_execute_applet (words);
-+    if (applet_result >= 0)
++    const struct busyq_applet *applet;
++    if (args && args[0])
 +      {
-+        result = applet_result;
-+        last_command_exit_value = result;
-+        goto return_result;
++        applet = busyq_find_applet (args[0]);
++        if (applet)
++          {
++            int ac, ret;
++            for (ac = 0; args[ac]; ac++)
++              ;
++            ret = applet->main_func (ac, args);
++            fflush (NULL);
++            _exit (ret);
++          }
 +      }
 +  }
-+
-   result = execute_disk_command (words, simple_command->redirects, command_line,
- 			pipe_in, pipe_out, async, fds_to_close,
- 			cmdflags);
+
+   SETOSTYPE (0);		/* Some systems use for USG/POSIX semantics */
+   execve (command, args, env);

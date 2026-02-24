@@ -5,21 +5,21 @@ index 73c07bd..34312bc 100644
 @@ -45,6 +45,13 @@
  #include "hashcmd.h"
  #include "findcmd.h"	/* matching prototypes and declarations */
- 
+
 +/* busyq: applet table for embedded command lookup */
 +#include "busyq_applet_table.h"
 +
 +/* Marker path returned when a command is found in the applet table.
-+ * execute_cmd.c checks for this to dispatch to the applet. */
++ * shell_execve() checks args[0] against the applet table to dispatch. */
 +static const char BUSYQ_APPLET_MARKER[] = "/proc/self/exe";
 +
  #include <glob/strmatch.h>
- 
+
  #if !defined (errno)
 @@ -287,6 +294,13 @@ _find_user_command_internal (const char *name, int flags)
       in the regular list of variables. */
    path_list = path_value ("PATH", 1);
- 
+
 +  /* busyq: check applet table before PATH search */
 +  {
 +    const struct busyq_applet *applet = busyq_find_applet(name);
@@ -29,4 +29,19 @@ index 73c07bd..34312bc 100644
 +
    if (path_list == 0)
      return (savestring (name));
- 
+
+@@ -348,6 +362,14 @@ search_for_command (const char *pathname, int flags)
+
+   hashed_file = command = (char *)NULL;
+
++  /* busyq: check applet table before hash table or PATH search.
++   * This ensures embedded applets are found with highest priority. */
++  {
++    const struct busyq_applet *applet = busyq_find_applet (pathname);
++    if (applet)
++      return (savestring (BUSYQ_APPLET_MARKER));
++  }
++
+   /* If PATH is in the temporary environment for this command, don't use the
+      hash table to search for the full pathname. */
+   path = find_variable_tempenv ("PATH");
