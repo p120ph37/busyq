@@ -9,6 +9,18 @@ vcpkg_extract_source_archive(SOURCE_PATH ARCHIVE "${ARCHIVE}")
 # Get the bb_namespace.h path
 set(BB_NAMESPACE_H "${CURRENT_PORT_DIR}/../../src/bb_namespace.h")
 
+# Detect toolchain flags (CFLAGS, LDFLAGS, CC) from vcpkg/cmake so that
+# alpine-clang-vcpkg EXTRA_* flags (LTO, -Oz, -ffunction-sections, etc.)
+# propagate into the raw-make build without hardcoding them here.
+vcpkg_cmake_get_vars(cmake_vars_file)
+include("${cmake_vars_file}")
+
+set(BB_CC "${VCPKG_DETECTED_CMAKE_C_COMPILER}")
+set(BB_CFLAGS "${VCPKG_DETECTED_CMAKE_C_FLAGS} ${VCPKG_DETECTED_CMAKE_C_FLAGS_RELEASE}")
+string(APPEND BB_CFLAGS " -DNDEBUG -include ${BB_NAMESPACE_H}")
+set(BB_LDFLAGS "${VCPKG_DETECTED_CMAKE_EXE_LINKER_FLAGS} ${VCPKG_DETECTED_CMAKE_EXE_LINKER_FLAGS_RELEASE}")
+string(APPEND BB_LDFLAGS " -static")
+
 # busybox uses kbuild (make), not CMake/autotools
 # We need to build with -include bb_namespace.h and -DBUSYQ_NO_BUSYBOX_MAIN
 set(BB_BUILD_DIR "${CURRENT_BUILDTREES_DIR}/${TARGET_TRIPLET}-rel")
@@ -23,15 +35,14 @@ file(RENAME "${BB_BUILD_DIR}/busybox.config" "${BB_BUILD_DIR}/.config")
 # We do NOT pass -Dmain=busybox_main here so the binary links normally with
 # its own main().  We collect the .o files afterward to create libbusybox.a
 # for our final link, where we recompile appletlib.o with -Dmain=busybox_main.
-# CC=cc and HOSTCC=cc because CMAKE_C_COMPILER is not set in portfile context.
 vcpkg_execute_required_process(
     COMMAND make
         -C "${SOURCE_PATH}"
         "O=${BB_BUILD_DIR}"
-        "CC=cc"
-        "HOSTCC=cc"
-        "CFLAGS=-ffunction-sections -fdata-sections -Oz -DNDEBUG -include ${BB_NAMESPACE_H}"
-        "LDFLAGS=-Wl,--gc-sections -static"
+        "CC=${BB_CC}"
+        "HOSTCC=${BB_CC}"
+        "CFLAGS=${BB_CFLAGS}"
+        "LDFLAGS=${BB_LDFLAGS}"
         -j8
         busybox_unstripped
     WORKING_DIRECTORY "${BB_BUILD_DIR}"
@@ -43,7 +54,7 @@ vcpkg_execute_required_process(
 # We use bb_entry_main (not busybox_main) because busybox already has a
 # busybox_main() function for the "busybox" applet itself.
 vcpkg_execute_required_process(
-    COMMAND sh -c "make -C '${SOURCE_PATH}' 'O=${BB_BUILD_DIR}' CC=cc HOSTCC=cc 'CFLAGS=-ffunction-sections -fdata-sections -Oz -DNDEBUG -include ${BB_NAMESPACE_H} -Dmain=bb_entry_main' libbb/appletlib.o"
+    COMMAND sh -c "make -C '${SOURCE_PATH}' 'O=${BB_BUILD_DIR}' 'CC=${BB_CC}' 'HOSTCC=${BB_CC}' 'CFLAGS=${BB_CFLAGS} -Dmain=bb_entry_main' libbb/appletlib.o"
     WORKING_DIRECTORY "${BB_BUILD_DIR}"
     LOGNAME "recompile-appletlib-${TARGET_TRIPLET}"
 )

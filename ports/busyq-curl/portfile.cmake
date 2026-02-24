@@ -49,12 +49,13 @@ set(CURL_OPTIONS
 )
 
 if("ssl" IN_LIST FEATURES)
-    # The embedded_certs.h is generated into the project's src/ directory
+    # Add embedded certs flags via VCPKG_C_FLAGS so they compose with
+    # toolchain flags (LTO, -Oz, etc.) instead of overriding them.
     set(BUSYQ_SRC_DIR "${CURRENT_PORT_DIR}/../../src")
+    string(APPEND VCPKG_C_FLAGS " -DBUSYQ_EMBEDDED_CERTS -I${BUSYQ_SRC_DIR}")
     list(APPEND CURL_OPTIONS
         -DCURL_USE_MBEDTLS=ON
         -DCURL_USE_OPENSSL=OFF
-        "-DCMAKE_C_FLAGS=-DBUSYQ_EMBEDDED_CERTS -I${BUSYQ_SRC_DIR}"
     )
 else()
     list(APPEND CURL_OPTIONS
@@ -87,6 +88,13 @@ if(NOT CURL_STATIC_LIB)
 endif()
 file(INSTALL ${CURL_STATIC_LIB} DESTINATION "${CURRENT_PACKAGES_DIR}/lib")
 
+# Detect toolchain flags so the ad-hoc curlmain compilation gets LTO, -Oz, etc.
+vcpkg_cmake_get_vars(cmake_vars_file)
+include("${cmake_vars_file}")
+
+set(CURLMAIN_CC "${VCPKG_DETECTED_CMAKE_C_COMPILER}")
+set(CURLMAIN_CFLAGS "${VCPKG_DETECTED_CMAKE_C_FLAGS} ${VCPKG_DETECTED_CMAKE_C_FLAGS_RELEASE}")
+
 # Build curl tool source files with -Dmain=curl_main into libcurlmain.a
 # We compile them via shell since CMAKE_C_COMPILER is not set in portfile context
 set(CURLMAIN_BUILD_DIR "${CURRENT_BUILDTREES_DIR}/${TARGET_TRIPLET}-rel-curlmain")
@@ -100,6 +108,8 @@ file(WRITE "${CURLMAIN_BUILD_DIR}/build_curlmain.sh" "\
 #!/bin/sh
 set -eu
 SRCDIR=\"${SOURCE_PATH}/src\"
+CC=\"${CURLMAIN_CC}\"
+TOOLCHAIN_CFLAGS=\"${CURLMAIN_CFLAGS}\"
 BASE_CFLAGS=\"-DHAVE_CONFIG_H -DCURL_STATICLIB\"
 INCS=\"-include ${CURL_BUILD_REL}/lib/curl_config.h -I${SOURCE_PATH}/include -I${SOURCE_PATH}/lib -I${SOURCE_PATH}/src -I${CURL_BUILD_REL}/lib -I${CURL_BUILD_REL}/include -I${CURRENT_INSTALLED_DIR}/include\"
 for f in \"\$SRCDIR\"/*.c \"\$SRCDIR\"/toolx/*.c; do
@@ -109,7 +119,7 @@ for f in \"\$SRCDIR\"/*.c \"\$SRCDIR\"/toolx/*.c; do
     if [ \"\$bn\" = \"tool_main\" ]; then
         EXTRA=\"-Dmain=curl_main\"
     fi
-    cc \$BASE_CFLAGS \$EXTRA \$INCS -c \"\$f\" -o \"\${bn}.o\" || exit 1
+    \$CC \$TOOLCHAIN_CFLAGS \$BASE_CFLAGS \$EXTRA \$INCS -c \"\$f\" -o \"\${bn}.o\" || exit 1
 done
 ar rcs \"${CURRENT_PACKAGES_DIR}/lib/libcurlmain.a\" *.o
 ")
