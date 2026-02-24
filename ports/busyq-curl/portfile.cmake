@@ -4,17 +4,20 @@ vcpkg_download_distfile(ARCHIVE
     SHA512 50c7a7b0528e0019697b0c59b3e56abb2578c71d77e4c085b56797276094b5611718c0a9cb2b14db7f8ab502fcf8f42a364297a3387fae3870a4d281484ba21c
 )
 
-vcpkg_extract_source_archive(SOURCE_PATH ARCHIVE "${ARCHIVE}")
-
-# Apply patches for SSL variant
+# SSL patches are guarded by #ifdef BUSYQ_EMBEDDED_CERTS / USE_MBEDTLS,
+# so they're safe to apply unconditionally.
 if("ssl" IN_LIST FEATURES)
-    vcpkg_apply_patches(
-        SOURCE_PATH "${SOURCE_PATH}"
-        PATCHES
-            embedded-certs.patch
-            extra-certs-envvar.patch
+    set(SSL_PATCHES
+        embedded-certs.patch
+        extra-certs-envvar.patch
     )
+else()
+    set(SSL_PATCHES "")
 endif()
+
+vcpkg_extract_source_archive(SOURCE_PATH ARCHIVE "${ARCHIVE}"
+    PATCHES ${SSL_PATCHES}
+)
 
 # Build curl with CMake (curl has native CMake support)
 # Match Alpine's curl feature set (minus LDAP, libssh2, HTTP/3).
@@ -46,6 +49,7 @@ if("ssl" IN_LIST FEATURES)
     # toolchain flags (LTO, -Oz, etc.) instead of overriding them.
     set(BUSYQ_SRC_DIR "${CURRENT_PORT_DIR}/../../src")
     string(APPEND VCPKG_C_FLAGS " -DBUSYQ_EMBEDDED_CERTS -I${BUSYQ_SRC_DIR}")
+    string(APPEND VCPKG_CXX_FLAGS " -DBUSYQ_EMBEDDED_CERTS -I${BUSYQ_SRC_DIR}")
     list(APPEND CURL_OPTIONS
         -DCURL_USE_MBEDTLS=ON
         -DCURL_USE_OPENSSL=OFF
@@ -70,6 +74,7 @@ vcpkg_cmake_configure(
         CURL_DISABLE_SSL
         CURL_USE_BEARSSL
         ENABLE_MANUAL
+        ENABLE_WEBSOCKETS
 )
 
 # Save curl_config.h (generated during cmake configure) to a stable location

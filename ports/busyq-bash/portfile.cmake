@@ -1,5 +1,8 @@
 vcpkg_download_distfile(ARCHIVE
-    URLS "https://ftp.gnu.org/gnu/bash/bash-5.3.tar.gz"
+    URLS
+        "https://ftpmirror.gnu.org/gnu/bash/bash-5.3.tar.gz"
+        "https://mirrors.kernel.org/gnu/bash/bash-5.3.tar.gz"
+        "https://ftp.gnu.org/gnu/bash/bash-5.3.tar.gz"
     FILENAME "bash-5.3.tar.gz"
     SHA512 426702c8b0fb9e0c9956259973ce5b657890fd47f4f807a64febf20077bb48d0b91474ed6e843d2ef277186b46c5fffa79b808da9b48d4ec027d5e2de1b28ed8
 )
