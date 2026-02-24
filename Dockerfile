@@ -75,7 +75,20 @@ RUN strip --strip-all build/ssl/busyq \
     && upx --best --lzma out/busyq-ssl || true
 
 # ============================================================
-# Stage 2: Extract binaries
+# Stage 2: Smoke tests
+# ============================================================
+FROM alpine:latest AS test
+COPY --from=build /src/out/busyq /busyq
+COPY --from=build /src/out/busyq-ssl /busyq-ssl
+RUN /busyq -c 'echo "bash: ok"' \
+    && /busyq -c 'type ls && ls /' > /dev/null \
+    && /busyq -c 'jq -n "{test: true}"' \
+    && /busyq -c 'curl --version' > /dev/null \
+    && /busyq-ssl -c 'curl --version' | grep -qi tls \
+    && echo "All smoke tests passed"
+
+# ============================================================
+# Stage 3: Extract binaries
 # ============================================================
 FROM scratch AS output
 COPY --from=build /src/out/busyq /busyq

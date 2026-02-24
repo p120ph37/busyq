@@ -1,0 +1,52 @@
+name: Check Base Image for Updates
+
+on:
+  schedule:
+    # Runs daily at 08:00 UTC (after alpine-clang-vcpkg rebuilds)
+    - cron: '0 8 * * *'
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Get latest base image digest
+        id: remote
+        run: |
+          DIGEST=$(docker manifest inspect p120ph37/alpine-clang-vcpkg:latest -v \
+            | jq -r 'if type == "array" then .[0].Descriptor.digest else .Descriptor.digest end')
+          echo "digest=$DIGEST" >> $GITHUB_OUTPUT
+          echo "Latest base image digest: $DIGEST"
+
+      - name: Read stored digest
+        id: stored
+        run: |
+          if [ -f .base-image-digest ]; then
+            STORED=$(cat .base-image-digest)
+            echo "digest=$STORED" >> $GITHUB_OUTPUT
+            echo "Stored digest: $STORED"
+          else
+            echo "digest=" >> $GITHUB_OUTPUT
+            echo "No stored digest found (first run)"
+          fi
+
+      - name: Commit updated digest to trigger rebuild
+        if: steps.remote.outputs.digest != steps.stored.outputs.digest
+        run: |
+          echo "${{ steps.remote.outputs.digest }}" > .base-image-digest
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add .base-image-digest
+          git commit -m "chore: bump base image (alpine-clang-vcpkg updated)"
+          git push
+
+      - name: No update needed
+        if: steps.remote.outputs.digest == steps.stored.outputs.digest
+        run: echo "Base image is already up to date (${{ steps.remote.outputs.digest }}), skipping rebuild."
