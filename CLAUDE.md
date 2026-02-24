@@ -128,7 +128,8 @@ docker exec -e VCPKG_FORCE_SYSTEM_BINARIES=1 \
   -e "http_proxy=$http_proxy" -e "https_proxy=$https_proxy" \
   -w /src busyq-dev vcpkg install
 docker exec -w /src busyq-dev cmake -B build -S . -DBUSYQ_SSL=OFF \
-  -D_VCPKG_INSTALLED_DIR=/src/vcpkg_installed -DVCPKG_TARGET_TRIPLET=x64-linux
+  -DCMAKE_TOOLCHAIN_FILE=$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake \
+  -DVCPKG_MANIFEST_INSTALL=OFF
 docker exec -w /src busyq-dev cmake --build build
 
 # Test

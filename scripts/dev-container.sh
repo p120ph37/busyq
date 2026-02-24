@@ -168,8 +168,8 @@ dev-build() {
     dev-exec 'cmake -B build/none -S . \
         -DCMAKE_BUILD_TYPE=Release \
         -DBUSYQ_SSL=OFF \
-        -D_VCPKG_INSTALLED_DIR=$(pwd)/vcpkg_installed \
-        -DVCPKG_TARGET_TRIPLET=x64-linux \
+        -DCMAKE_TOOLCHAIN_FILE=$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake \
+        -DVCPKG_MANIFEST_INSTALL=OFF \
         && cmake --build build/none'
 
     echo "dev-container: build complete. Binary at build/none/busyq"

@@ -44,9 +44,15 @@ WORKDIR /src
 RUN vcpkg install
 
 # Build the busyq binary
+# The vcpkg toolchain file auto-detects the target triplet and sets
+# _VCPKG_INSTALLED_DIR so cmake's find_library() calls locate the
+# overlay port libraries. VCPKG_MANIFEST_INSTALL=OFF skips re-running
+# vcpkg install (already done above).
 RUN cmake -B build/none -S . \
         -DCMAKE_BUILD_TYPE=Release \
         -DBUSYQ_SSL=OFF \
+        -DCMAKE_TOOLCHAIN_FILE=$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake \
+        -DVCPKG_MANIFEST_INSTALL=OFF \
     && cmake --build build/none
 
 # Strip and compress
@@ -66,6 +72,8 @@ RUN vcpkg install "busyq[ssl]"
 RUN cmake -B build/ssl -S . \
         -DCMAKE_BUILD_TYPE=Release \
         -DBUSYQ_SSL=ON \
+        -DCMAKE_TOOLCHAIN_FILE=$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake \
+        -DVCPKG_MANIFEST_INSTALL=OFF \
     && cmake --build build/ssl
 
 # Strip and compress
