@@ -40,41 +40,23 @@ COPY . /src
 WORKDIR /src
 
 # ---- Build variant 1: no SSL ----
-# Install all overlay port dependencies (bash, curl-nossl, jq)
-RUN vcpkg install
-
-# Build the busyq binary
-# The vcpkg toolchain file auto-detects the target triplet and sets
-# _VCPKG_INSTALLED_DIR so cmake's find_library() calls locate the
-# overlay port libraries. VCPKG_MANIFEST_INSTALL=OFF skips re-running
-# vcpkg install (already done above).
-RUN cmake -B build/none -S . \
-        -DCMAKE_BUILD_TYPE=Release \
-        -DBUSYQ_SSL=OFF \
-        -DCMAKE_TOOLCHAIN_FILE=$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake \
-        -DVCPKG_MANIFEST_INSTALL=OFF \
-    && cmake --build build/none
+# CMakePresets.json configures the vcpkg toolchain file, which handles
+# package installation (via vcpkg.json manifest) during cmake configure.
+RUN cmake --preset no-ssl && cmake --build --preset no-ssl
 
 # Strip and compress
-RUN strip --strip-all build/none/busyq \
+RUN strip --strip-all build/no-ssl/busyq \
     && mkdir -p out \
-    && cp build/none/busyq out/busyq \
+    && cp build/no-ssl/busyq out/busyq \
     && upx --best --lzma out/busyq || true
 
 # ---- Build variant 2: with SSL ----
-# Generate embedded CA certificates
+# Generate embedded CA certificates (needed before vcpkg builds curl[ssl])
 RUN scripts/generate-certs.sh src
 
-# Install with SSL feature enabled
-RUN vcpkg install "busyq[ssl]"
-
-# Build the SSL variant
-RUN cmake -B build/ssl -S . \
-        -DCMAKE_BUILD_TYPE=Release \
-        -DBUSYQ_SSL=ON \
-        -DCMAKE_TOOLCHAIN_FILE=$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake \
-        -DVCPKG_MANIFEST_INSTALL=OFF \
-    && cmake --build build/ssl
+# The "ssl" preset sets VCPKG_MANIFEST_FEATURES=ssl, which tells vcpkg
+# to install the ssl feature dependencies (mbedtls, curl[ssl]).
+RUN cmake --preset ssl && cmake --build --preset ssl
 
 # Strip and compress
 RUN strip --strip-all build/ssl/busyq \

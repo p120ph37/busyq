@@ -1,0 +1,40 @@
+{
+  "version": 3,
+  "cmakeMinimumRequired": { "major": 3, "minor": 21, "patch": 0 },
+  "configurePresets": [
+    {
+      "name": "default",
+      "hidden": true,
+      "binaryDir": "${sourceDir}/build/${presetName}",
+      "toolchainFile": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release"
+      }
+    },
+    {
+      "name": "no-ssl",
+      "inherits": "default",
+      "cacheVariables": {
+        "BUSYQ_SSL": "OFF"
+      }
+    },
+    {
+      "name": "ssl",
+      "inherits": "default",
+      "cacheVariables": {
+        "BUSYQ_SSL": "ON",
+        "VCPKG_MANIFEST_FEATURES": "ssl"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "no-ssl",
+      "configurePreset": "no-ssl"
+    },
+    {
+      "name": "ssl",
+      "configurePreset": "ssl"
+    }
+  ]
+}

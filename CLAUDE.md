@@ -10,6 +10,7 @@ Always launches as bash, with all bundled tools available as pseudo-builtins.
 - `ports/` - vcpkg overlay ports (bash, curl, jq, coreutils, future tools)
 - `scripts/` - Helper scripts (cert generation, dev container)
 - `CMakeLists.txt` - Final link step
+- `CMakePresets.json` - Build presets (vcpkg toolchain, no-ssl/ssl variants)
 - `Dockerfile` - Multi-stage build (uses p120ph37/alpine-clang-vcpkg)
 - `PLAN.md` - Roadmap for adding upstream GNU tool replacements
 
@@ -124,16 +125,15 @@ docker exec busyq-dev apk add --no-cache bison flex linux-headers perl xz
 
 # Build (VCPKG_FORCE_SYSTEM_BINARIES makes vcpkg use system curl which
 # respects proxy env vars; vcpkg's bundled curl does not)
+# CMakePresets.json configures the vcpkg toolchain, which handles
+# package installation automatically during cmake configure.
 docker exec -e VCPKG_FORCE_SYSTEM_BINARIES=1 \
   -e "http_proxy=$http_proxy" -e "https_proxy=$https_proxy" \
-  -w /src busyq-dev vcpkg install
-docker exec -w /src busyq-dev cmake -B build -S . -DBUSYQ_SSL=OFF \
-  -DCMAKE_TOOLCHAIN_FILE=$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake \
-  -DVCPKG_MANIFEST_INSTALL=OFF
-docker exec -w /src busyq-dev cmake --build build
+  -w /src busyq-dev cmake --preset no-ssl
+docker exec -w /src busyq-dev cmake --build --preset no-ssl
 
 # Test
-docker exec -w /src busyq-dev ./build/busyq -c 'echo hello && ls / && date +%s'
+docker exec -w /src busyq-dev ./build/no-ssl/busyq -c 'echo hello && ls / && date +%s'
 ```
 
 ### Proxy and DNS troubleshooting
