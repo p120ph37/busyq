@@ -17,34 +17,27 @@ if("ssl" IN_LIST FEATURES)
 endif()
 
 # Build curl with CMake (curl has native CMake support)
+# Match Alpine's curl feature set (minus LDAP, libssh2, HTTP/3).
+# Protocols: Alpine enables all except LDAP.
+# Libraries: zlib, brotli, zstd, nghttp2 added to match Alpine.
+# Not matched: HTTP/3+QUIC (needs OpenSSL), c-ares, libidn2, libpsl.
 set(CURL_OPTIONS
     -DBUILD_CURL_EXE=OFF
     -DBUILD_SHARED_LIBS=OFF
     -DBUILD_STATIC_LIBS=ON
     -DBUILD_TESTING=OFF
-    -DCURL_DISABLE_DICT=ON
-    -DCURL_DISABLE_FTP=ON
-    -DCURL_DISABLE_IMAP=ON
     -DCURL_DISABLE_LDAP=ON
-    -DCURL_DISABLE_MQTT=ON
-    -DCURL_DISABLE_POP3=ON
-    -DCURL_DISABLE_RTSP=ON
-    -DCURL_DISABLE_SMB=ON
-    -DCURL_DISABLE_SMTP=ON
-    -DCURL_DISABLE_TELNET=ON
-    -DCURL_DISABLE_TFTP=ON
-    -DCURL_DISABLE_GOPHER=ON
-    -DCURL_DISABLE_NTLM=ON
     -DENABLE_MANUAL=OFF
     -DENABLE_UNIX_SOCKETS=ON
     -DENABLE_IPV6=ON
+    -DENABLE_WEBSOCKETS=ON
     -DHTTP_ONLY=OFF
     -DCURL_USE_LIBPSL=OFF
     -DCURL_USE_LIBSSH2=OFF
-    -DCURL_ZLIB=OFF
-    -DCURL_BROTLI=OFF
-    -DCURL_ZSTD=OFF
-    -DUSE_NGHTTP2=OFF
+    -DCURL_ZLIB=ON
+    -DCURL_BROTLI=ON
+    -DCURL_ZSTD=ON
+    -DUSE_NGHTTP2=ON
     -DUSE_LIBIDN2=OFF
 )
 
