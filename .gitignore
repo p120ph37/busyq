@@ -12,6 +12,9 @@ vcpkg_installed/
 src/embedded_certs.h
 src/busybox_applets.h
 
+# CMake temporary files
+__cmake_systeminformation/
+
 # IDE / editor
 .vscode/
 *.swp

@@ -14,7 +14,7 @@
 # Examples:
 #   dev-exec apk add --no-cache bison flex
 #   dev-exec 'vcpkg install && cmake -B build -S . && cmake --build build'
-#   dev-exec './build/none/busyq -c "echo hello | sort"'
+#   dev-exec './build/no-ssl/busyq -c "echo hello | sort"'
 #
 set -euo pipefail
 
@@ -161,18 +161,10 @@ dev-exec() {
 
 # ── Run the full build ───────────────────────────────────────────────────
 dev-build() {
-    echo "dev-container: running vcpkg install..."
-    dev-exec 'vcpkg install'
+    echo "dev-container: configuring + building busyq (no SSL)..."
+    dev-exec 'cmake --preset no-ssl && cmake --build --preset no-ssl'
 
-    echo "dev-container: building busyq (no SSL)..."
-    dev-exec 'cmake -B build/none -S . \
-        -DCMAKE_BUILD_TYPE=Release \
-        -DBUSYQ_SSL=OFF \
-        -DCMAKE_TOOLCHAIN_FILE=$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake \
-        -DVCPKG_MANIFEST_INSTALL=OFF \
-        && cmake --build build/none'
-
-    echo "dev-container: build complete. Binary at build/none/busyq"
+    echo "dev-container: build complete. Binary at build/no-ssl/busyq"
 }
 
 # ── Stop and remove the container ────────────────────────────────────────
@@ -184,13 +176,13 @@ dev-stop() {
 # ── Quick test ───────────────────────────────────────────────────────────
 dev-test() {
     echo "=== Smoke tests ==="
-    dev-exec './build/none/busyq -c "echo \"bash: ok\""'
-    dev-exec './build/none/busyq -c "ls / > /dev/null && echo \"ls: ok\""'
-    dev-exec './build/none/busyq -c "cat /dev/null && echo \"cat: ok\""'
-    dev-exec './build/none/busyq -c "date +%s > /dev/null && echo \"date: ok\""'
-    dev-exec './build/none/busyq -c "echo -e \"b\na\nc\" | sort | head -1 | tr a-z A-Z && echo \"coreutils: ok\""'
-    dev-exec './build/none/busyq -c "jq -n \"{test: true}\" && echo \"jq: ok\""'
-    dev-exec './build/none/busyq -c "curl --version > /dev/null && echo \"curl: ok\""'
+    dev-exec './build/no-ssl/busyq -c "echo \"bash: ok\""'
+    dev-exec './build/no-ssl/busyq -c "ls / > /dev/null && echo \"ls: ok\""'
+    dev-exec './build/no-ssl/busyq -c "cat /dev/null && echo \"cat: ok\""'
+    dev-exec './build/no-ssl/busyq -c "date +%s > /dev/null && echo \"date: ok\""'
+    dev-exec './build/no-ssl/busyq -c "echo -e \"b\na\nc\" | sort | head -1 | tr a-z A-Z && echo \"coreutils: ok\""'
+    dev-exec './build/no-ssl/busyq -c "jq -n \"{test: true}\" && echo \"jq: ok\""'
+    dev-exec './build/no-ssl/busyq -c "curl --version > /dev/null && echo \"curl: ok\""'
     echo "=== All smoke tests passed ==="
 }
 
