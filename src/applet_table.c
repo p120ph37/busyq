@@ -15,6 +15,8 @@
 
 /* Busybox applet lookup (from libbb) */
 extern int find_applet_by_name(const char *name);
+/* Busybox runtime initialization (sets bb_errno, applet_name, etc.) */
+extern void lbb_prepare(const char *applet);
 /* Busybox applet execution — does not return, calls exit() */
 extern void run_applet_no_and_exit(int applet_no, const char *name, char **argv);
 
@@ -70,6 +72,9 @@ static int busybox_applet_dispatch(int argc, char **argv)
     applet_no = find_applet_by_name(argv[0]);
     if (applet_no < 0)
         return -1;
+
+    /* Initialize busybox runtime (sets bb_errno, applet_name) */
+    lbb_prepare(argv[0]);
 
     /* Does not return — calls exit() internally */
     run_applet_no_and_exit(applet_no, argv[0], argv);

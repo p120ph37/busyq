@@ -94,17 +94,22 @@ file(MAKE_DIRECTORY "${CURLMAIN_BUILD_DIR}")
 
 set(CURL_BUILD_REL "${CURRENT_BUILDTREES_DIR}/${TARGET_TRIPLET}-rel")
 
-# Write a build script for curl tool objects to avoid quoting issues in sh -c
+# Write a build script for curl tool objects to avoid quoting issues in sh -c.
+# Only tool_main.c gets -Dmain=curl_main; other files are compiled normally.
 file(WRITE "${CURLMAIN_BUILD_DIR}/build_curlmain.sh" "\
 #!/bin/sh
 set -eu
 SRCDIR=\"${SOURCE_PATH}/src\"
-CFLAGS=\"-Dmain=curl_main -DHAVE_CONFIG_H -DCURL_STATICLIB\"
+BASE_CFLAGS=\"-DHAVE_CONFIG_H -DCURL_STATICLIB\"
 INCS=\"-include ${CURL_BUILD_REL}/lib/curl_config.h -I${SOURCE_PATH}/include -I${SOURCE_PATH}/lib -I${SOURCE_PATH}/src -I${CURL_BUILD_REL}/lib -I${CURL_BUILD_REL}/include -I${CURRENT_INSTALLED_DIR}/include\"
 for f in \"\$SRCDIR\"/*.c \"\$SRCDIR\"/toolx/*.c; do
     [ -f \"\$f\" ] || continue
     bn=\$(basename \"\$f\" .c)
-    cc \$CFLAGS \$INCS -c \"\$f\" -o \"\${bn}.o\" || exit 1
+    EXTRA=\"\"
+    if [ \"\$bn\" = \"tool_main\" ]; then
+        EXTRA=\"-Dmain=curl_main\"
+    fi
+    cc \$BASE_CFLAGS \$EXTRA \$INCS -c \"\$f\" -o \"\${bn}.o\" || exit 1
 done
 ar rcs \"${CURRENT_PACKAGES_DIR}/lib/libcurlmain.a\" *.o
 ")
