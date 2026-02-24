@@ -4,7 +4,11 @@
   "description": "curl built as a static library with renamed main for busyq integration",
   "dependencies": [
     "vcpkg-cmake",
-    "vcpkg-cmake-config"
+    "vcpkg-cmake-config",
+    {
+      "name": "vcpkg-cmake-get-vars",
+      "host": true
+    }
   ],
   "features": {
     "ssl": {

@@ -2,5 +2,7 @@
   "name": "busyq-bash",
   "version": "5.3",
   "description": "bash built as static libraries with renamed main and applet integration for busyq",
-  "dependencies": []
+  "dependencies": [
+    "ncurses"
+  ]
 }

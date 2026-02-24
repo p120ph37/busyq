@@ -6,6 +6,7 @@
     "busyq-bash",
     "busyq-busybox",
     "busyq-jq",
+    "ncurses",
     "oniguruma",
     {
       "name": "busyq-curl",

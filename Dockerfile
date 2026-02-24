@@ -22,10 +22,9 @@ ENV EXTRA_LDFLAGS="-flto -Wl,--gc-sections -Wl,--icf=all"
 ENV EXTRA_CFLAGS_RELEASE="-Oz -DNDEBUG"
 
 # Install additional build dependencies not in the base image
+# NOTE: ncurses is built via vcpkg (not apk) so it gets LTO like everything else
 RUN apk add --no-cache \
     upx \
-    ncurses-dev \
-    ncurses-static \
     autoconf \
     automake \
     libtool \

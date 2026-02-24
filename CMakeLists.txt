@@ -34,7 +34,7 @@ target_include_directories(busyq PRIVATE
 # --- Link order matters for static libraries ---
 # bash depends on readline, which depends on ncurses
 # The overall link order: bash > builtins > readline > history > glob > tilde > sh >
-#                          busybox > curl > jq > oniguruma > [mbedtls] > system
+#                          busybox > curl > jq > oniguruma > ncurses > [mbedtls] > system
 
 set(BUSYQ_LINK_LIBS "")
 
@@ -60,6 +60,12 @@ find_library(LIB_JQMAIN jqmain PATHS "${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRI
 
 # Oniguruma (regex library for jq)
 find_library(LIB_ONIG onig PATHS "${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/lib" NO_DEFAULT_PATH)
+
+# ncurses (terminal handling for bash/readline, built via vcpkg for LTO)
+find_library(LIB_NCURSES ncursesw PATHS "${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/lib" NO_DEFAULT_PATH)
+if(NOT LIB_NCURSES)
+    find_library(LIB_NCURSES ncurses PATHS "${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/lib" NO_DEFAULT_PATH)
+endif()
 
 # Assemble link list
 # Bash
@@ -111,6 +117,11 @@ if(LIB_ONIG)
     list(APPEND BUSYQ_LINK_LIBS ${LIB_ONIG})
 endif()
 
+# ncurses (after oniguruma, before SSL — readline depends on ncurses)
+if(LIB_NCURSES)
+    list(APPEND BUSYQ_LINK_LIBS ${LIB_NCURSES})
+endif()
+
 # SSL libraries (mbedtls)
 if(BUSYQ_SSL)
     find_library(LIB_MBEDTLS mbedtls PATHS "${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/lib" NO_DEFAULT_PATH)
@@ -127,9 +138,8 @@ if(BUSYQ_SSL)
     endif()
 endif()
 
-# System libraries
+# System libraries (musl libc — already LTO-enabled in alpine-clang-vcpkg)
 list(APPEND BUSYQ_LINK_LIBS
-    ncursesw
     m
     dl
     pthread
