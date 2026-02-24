@@ -1,5 +1,6 @@
 vcpkg_download_distfile(ARCHIVE
     URLS "https://ftpmirror.gnu.org/gnu/coreutils/coreutils-9.5.tar.xz"
+         "https://mirrors.kernel.org/gnu/coreutils/coreutils-9.5.tar.xz"
          "https://ftp.gnu.org/gnu/coreutils/coreutils-9.5.tar.xz"
     FILENAME "coreutils-9.5.tar.xz"
     SHA512 2ca0deac4dc10a80fd0c6fd131252e99d457fd03b7bd626a6bc74fe5a0529c0a3d48ce1f5da1d3b3a7a150a1ce44f0fbb6b68a6ac543dfd5baa3e71f5d65401c

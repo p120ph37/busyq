@@ -2,7 +2,7 @@ diff --git a/lib/vtls/mbedtls.c b/lib/vtls/mbedtls.c
 index 2222222..3333333 100644
 --- a/lib/vtls/mbedtls.c
 +++ b/lib/vtls/mbedtls.c
-@@ -506,6 +506,35 @@
+@@ -506,6 +506,36 @@
 
    /* Load the trusted CA */
    mbedtls_x509_crt_init(&backend->cacert);
