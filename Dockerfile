@@ -42,7 +42,16 @@ WORKDIR /src
 # ---- Build variant 1: no SSL ----
 # CMakePresets.json configures the vcpkg toolchain file, which handles
 # package installation (via vcpkg.json manifest) during cmake configure.
-RUN cmake --preset no-ssl && cmake --build --preset no-ssl
+#
+# On aarch64, clang's compiler-rt outline-atomics helpers reference
+# getauxval(), which creates a link-order cycle with musl's static libc.
+# Disabling outline atomics uses inline atomics instead (works on all
+# aarch64 CPUs, slightly slower on older cores without LSE).
+RUN if [ "$(uname -m)" = "aarch64" ]; then \
+        export EXTRA_CFLAGS="$EXTRA_CFLAGS -mno-outline-atomics"; \
+        export EXTRA_CXXFLAGS="$EXTRA_CXXFLAGS -mno-outline-atomics"; \
+    fi && \
+    cmake --preset no-ssl && cmake --build --preset no-ssl
 
 # Strip and compress
 RUN strip --strip-all build/no-ssl/busyq \
@@ -56,7 +65,11 @@ RUN scripts/generate-certs.sh src
 
 # The "ssl" preset sets VCPKG_MANIFEST_FEATURES=ssl, which tells vcpkg
 # to install the ssl feature dependencies (mbedtls, curl[ssl]).
-RUN cmake --preset ssl && cmake --build --preset ssl
+RUN if [ "$(uname -m)" = "aarch64" ]; then \
+        export EXTRA_CFLAGS="$EXTRA_CFLAGS -mno-outline-atomics"; \
+        export EXTRA_CXXFLAGS="$EXTRA_CXXFLAGS -mno-outline-atomics"; \
+    fi && \
+    cmake --preset ssl && cmake --build --preset ssl
 
 # Strip and compress
 RUN strip --strip-all build/ssl/busyq \

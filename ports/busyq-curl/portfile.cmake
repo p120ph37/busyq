@@ -152,5 +152,8 @@ file(REMOVE_RECURSE
     "${CURRENT_PACKAGES_DIR}/lib/pkgconfig"
 )
 
+# Suppress vcpkg post-build warnings — we only produce release libraries
+set(VCPKG_POLICY_MISMATCHED_NUMBER_OF_BINARIES enabled)
+
 # Install copyright
 vcpkg_install_copyright(FILE_LIST "${SOURCE_PATH}/COPYING")

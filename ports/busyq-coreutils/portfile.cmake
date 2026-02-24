@@ -113,5 +113,10 @@ vcpkg_execute_required_process(
     LOGNAME "symbol-isolate-${TARGET_TRIPLET}"
 )
 
+# Suppress vcpkg post-build warnings — we only produce release libraries
+# and coreutils has no public headers (it's a tool, not a library)
+set(VCPKG_POLICY_MISMATCHED_NUMBER_OF_BINARIES enabled)
+set(VCPKG_POLICY_EMPTY_INCLUDE_FOLDER enabled)
+
 # Install copyright
 vcpkg_install_copyright(FILE_LIST "${SOURCE_PATH}/COPYING")
