@@ -8,7 +8,11 @@
     {
       "name": "vcpkg-cmake-get-vars",
       "host": true
-    }
+    },
+    "zlib",
+    "brotli",
+    "zstd",
+    "nghttp2"
   ],
   "features": {
     "ssl": {

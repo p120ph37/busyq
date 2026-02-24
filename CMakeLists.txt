@@ -34,7 +34,7 @@ target_include_directories(busyq PRIVATE
 # --- Link order matters for static libraries ---
 # bash depends on readline, which depends on ncurses
 # The overall link order: bash > builtins > readline > history > glob > tilde > sh >
-#                          busybox > curl > jq > oniguruma > ncurses > [mbedtls] > system
+#   busybox > curl > nghttp2 > zlib > brotli > zstd > jq > oniguruma > ncurses > [mbedtls] > system
 
 set(BUSYQ_LINK_LIBS "")
 
@@ -53,6 +53,13 @@ find_library(LIB_BUSYBOX busybox PATHS "${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_T
 # Curl (library + tool main)
 find_library(LIB_CURL curl PATHS "${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/lib" NO_DEFAULT_PATH)
 find_library(LIB_CURLMAIN curlmain PATHS "${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/lib" NO_DEFAULT_PATH)
+
+# Curl dependencies (compression + HTTP/2)
+find_library(LIB_NGHTTP2 nghttp2 PATHS "${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/lib" NO_DEFAULT_PATH)
+find_library(LIB_Z z PATHS "${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/lib" NO_DEFAULT_PATH)
+find_library(LIB_BROTLIDEC brotlidec PATHS "${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/lib" NO_DEFAULT_PATH)
+find_library(LIB_BROTLICOMMON brotlicommon PATHS "${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/lib" NO_DEFAULT_PATH)
+find_library(LIB_ZSTD zstd PATHS "${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/lib" NO_DEFAULT_PATH)
 
 # jq (library + tool main)
 find_library(LIB_JQ jq PATHS "${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/lib" NO_DEFAULT_PATH)
@@ -104,6 +111,23 @@ if(LIB_CURL)
     list(APPEND BUSYQ_LINK_LIBS ${LIB_CURL})
 endif()
 
+# Curl dependencies (compression + HTTP/2, linked after curl)
+if(LIB_NGHTTP2)
+    list(APPEND BUSYQ_LINK_LIBS ${LIB_NGHTTP2})
+endif()
+if(LIB_Z)
+    list(APPEND BUSYQ_LINK_LIBS ${LIB_Z})
+endif()
+if(LIB_BROTLIDEC)
+    list(APPEND BUSYQ_LINK_LIBS ${LIB_BROTLIDEC})
+endif()
+if(LIB_BROTLICOMMON)
+    list(APPEND BUSYQ_LINK_LIBS ${LIB_BROTLICOMMON})
+endif()
+if(LIB_ZSTD)
+    list(APPEND BUSYQ_LINK_LIBS ${LIB_ZSTD})
+endif()
+
 # jq
 if(LIB_JQMAIN)
     list(APPEND BUSYQ_LINK_LIBS ${LIB_JQMAIN})
@@ -122,8 +146,14 @@ if(LIB_NCURSES)
     list(APPEND BUSYQ_LINK_LIBS ${LIB_NCURSES})
 endif()
 
-# SSL libraries (mbedtls)
+# SSL: mbedtls libraries + ssl_client applet (shared TLS for curl and busybox)
 if(BUSYQ_SSL)
+    target_sources(busyq PRIVATE src/ssl_client_mbedtls.c)
+    target_compile_definitions(busyq PRIVATE BUSYQ_SSL)
+    if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/src/embedded_certs.h")
+        target_compile_definitions(busyq PRIVATE BUSYQ_EMBEDDED_CERTS)
+    endif()
+
     find_library(LIB_MBEDTLS mbedtls PATHS "${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/lib" NO_DEFAULT_PATH)
     find_library(LIB_MBEDX509 mbedx509 PATHS "${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/lib" NO_DEFAULT_PATH)
     find_library(LIB_MBEDCRYPTO mbedcrypto PATHS "${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/lib" NO_DEFAULT_PATH)

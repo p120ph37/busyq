@@ -29,6 +29,9 @@ extern const char applet_names[];
 /* External tool entry points */
 extern int curl_main(int argc, char **argv);
 extern int jq_main(int argc, char **argv);
+#ifdef BUSYQ_SSL
+extern int ssl_client_main(int argc, char **argv);
+#endif
 
 static int busyq_help_main(int argc, char **argv);
 
@@ -36,6 +39,9 @@ static const struct busyq_applet extra_applets[] = {
     { "busyq",  busyq_help_main, 0 },
     { "curl",   curl_main, 0 },
     { "jq",     jq_main,   0 },
+#ifdef BUSYQ_SSL
+    { "ssl_client", ssl_client_main, 0 },
+#endif
 };
 static const int extra_count = sizeof(extra_applets) / sizeof(extra_applets[0]);
 
