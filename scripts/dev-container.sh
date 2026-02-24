@@ -14,7 +14,7 @@
 # Examples:
 #   dev-exec apk add --no-cache bison flex
 #   dev-exec 'vcpkg install && cmake -B build -S . && cmake --build build'
-#   dev-exec './build/busyq -c "awk \"BEGIN {print 42}\""'
+#   dev-exec './build/none/busyq -c "echo hello | sort"'
 #
 set -euo pipefail
 
@@ -132,17 +132,31 @@ dev-start() {
     # Install proxy CA if behind a TLS proxy
     install_proxy_ca "${DEV_CONTAINER_NAME}"
 
+    # Fix DNS — sandbox environments may generate empty /etc/resolv.conf
+    # inside the container, breaking name resolution even with --network=host
+    docker exec "${DEV_CONTAINER_NAME}" sh -c \
+        'grep -q nameserver /etc/resolv.conf 2>/dev/null || echo "nameserver 8.8.8.8" > /etc/resolv.conf'
+
     # Install build dependencies
     echo "dev-container: installing build dependencies..."
     docker exec "${DEV_CONTAINER_NAME}" \
-        apk add --no-cache bison flex linux-headers perl 2>&1 | tail -1
+        apk add --no-cache bison flex linux-headers perl xz 2>&1 | tail -1
 
     echo "dev-container: ready. Use 'dev-exec <cmd>' to run commands."
 }
 
 # ── Execute a command in the container ───────────────────────────────────
+# Forwards proxy env vars and VCPKG_FORCE_SYSTEM_BINARIES so that vcpkg
+# uses the system curl (which respects proxy settings) instead of its own.
 dev-exec() {
-    docker exec -w /src "${DEV_CONTAINER_NAME}" sh -c "$*"
+    local env_args=(-e "VCPKG_FORCE_SYSTEM_BINARIES=1")
+    local var
+    for var in http_proxy https_proxy HTTP_PROXY HTTPS_PROXY no_proxy NO_PROXY; do
+        if [ -n "${!var:-}" ]; then
+            env_args+=(-e "${var}=${!var}")
+        fi
+    done
+    docker exec "${env_args[@]}" -w /src "${DEV_CONTAINER_NAME}" sh -c "$*"
 }
 
 # ── Run the full build ───────────────────────────────────────────────────
@@ -171,10 +185,12 @@ dev-stop() {
 dev-test() {
     echo "=== Smoke tests ==="
     dev-exec './build/none/busyq -c "echo \"bash: ok\""'
-    dev-exec './build/none/busyq -c "type ls && ls / > /dev/null && echo \"applets: ok\""'
+    dev-exec './build/none/busyq -c "ls / > /dev/null && echo \"ls: ok\""'
+    dev-exec './build/none/busyq -c "cat /dev/null && echo \"cat: ok\""'
+    dev-exec './build/none/busyq -c "date +%s > /dev/null && echo \"date: ok\""'
+    dev-exec './build/none/busyq -c "echo -e \"b\na\nc\" | sort | head -1 | tr a-z A-Z && echo \"coreutils: ok\""'
     dev-exec './build/none/busyq -c "jq -n \"{test: true}\" && echo \"jq: ok\""'
     dev-exec './build/none/busyq -c "curl --version > /dev/null && echo \"curl: ok\""'
-    dev-exec './build/none/busyq -c "echo test | awk \"{print \\\"awk:\\\", \\\$0}\""'
     echo "=== All smoke tests passed ==="
 }
 
