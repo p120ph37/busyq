@@ -10,6 +10,8 @@ vcpkg_extract_source_archive(SOURCE_PATH ARCHIVE "${ARCHIVE}")
 # We do NOT pass -Dmain=jq_main in CFLAGS here because that breaks
 # configure's "C compiler works" test. Instead we compile jq's main.c
 # separately after the build with the rename flag.
+# We DO pass yacc symbol renames here — these are harmless to configure tests
+# but prevent yyerror/yyparse/yylex from colliding with bash's parser.
 vcpkg_configure_make(
     SOURCE_PATH "${SOURCE_PATH}"
     OPTIONS
@@ -18,6 +20,7 @@ vcpkg_configure_make(
         --disable-maintainer-mode
         --disable-docs
         "--with-oniguruma=${CURRENT_INSTALLED_DIR}"
+        "CFLAGS=-Dyyerror=jq_yyerror -Dyyparse=jq_yyparse"
 )
 
 vcpkg_build_make()

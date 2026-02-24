@@ -53,8 +53,10 @@ vcpkg_execute_required_process(
 )
 
 # Collect all .o files into libbusybox.a
+# Exclude built-in.o (kbuild thin archives, not real object files) and scripts/
 file(GLOB_RECURSE BB_OBJS "${BB_BUILD_DIR}/*.o")
 list(FILTER BB_OBJS EXCLUDE REGEX "scripts/")
+list(FILTER BB_OBJS EXCLUDE REGEX "built-in\\.o$")
 list(LENGTH BB_OBJS BB_OBJ_COUNT)
 if(BB_OBJ_COUNT LESS 10)
     message(FATAL_ERROR "busybox build produced only ${BB_OBJ_COUNT} .o files — build likely failed")
@@ -67,21 +69,6 @@ vcpkg_execute_required_process(
     WORKING_DIRECTORY "${BB_BUILD_DIR}"
     LOGNAME "ar-libbusybox-${TARGET_TRIPLET}"
 )
-
-# Generate the busybox applet table header for busyq
-set(APPLET_HEADER "${CURRENT_PACKAGES_DIR}/include/busybox_applets.h")
-file(MAKE_DIRECTORY "${CURRENT_PACKAGES_DIR}/include")
-
-set(GEN_SCRIPT "${CURRENT_PORT_DIR}/gen_busyq_applets.sh")
-if(EXISTS "${GEN_SCRIPT}")
-    vcpkg_execute_required_process(
-        COMMAND sh "${GEN_SCRIPT}" "${BB_BUILD_DIR}" "${APPLET_HEADER}"
-        WORKING_DIRECTORY "${BB_BUILD_DIR}"
-        LOGNAME "gen-applets-${TARGET_TRIPLET}"
-    )
-else()
-    file(WRITE "${APPLET_HEADER}" "/* Auto-generated busybox applet table - fallback */\n")
-endif()
 
 # Install key busybox headers
 file(INSTALL

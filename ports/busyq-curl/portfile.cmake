@@ -94,9 +94,23 @@ file(MAKE_DIRECTORY "${CURLMAIN_BUILD_DIR}")
 
 set(CURL_BUILD_REL "${CURRENT_BUILDTREES_DIR}/${TARGET_TRIPLET}-rel")
 
-# Compile all tool_*.c and slist_wc.c with main renamed to curl_main
+# Write a build script for curl tool objects to avoid quoting issues in sh -c
+file(WRITE "${CURLMAIN_BUILD_DIR}/build_curlmain.sh" "\
+#!/bin/sh
+set -eu
+SRCDIR=\"${SOURCE_PATH}/src\"
+CFLAGS=\"-Dmain=curl_main -DHAVE_CONFIG_H -DCURL_STATICLIB\"
+INCS=\"-include ${CURL_BUILD_REL}/lib/curl_config.h -I${SOURCE_PATH}/include -I${SOURCE_PATH}/lib -I${SOURCE_PATH}/src -I${CURL_BUILD_REL}/lib -I${CURL_BUILD_REL}/include -I${CURRENT_INSTALLED_DIR}/include\"
+for f in \"\$SRCDIR\"/*.c \"\$SRCDIR\"/toolx/*.c; do
+    [ -f \"\$f\" ] || continue
+    bn=\$(basename \"\$f\" .c)
+    cc \$CFLAGS \$INCS -c \"\$f\" -o \"\${bn}.o\" || exit 1
+done
+ar rcs \"${CURRENT_PACKAGES_DIR}/lib/libcurlmain.a\" *.o
+")
+
 vcpkg_execute_required_process(
-    COMMAND sh -c "cd '${CURLMAIN_BUILD_DIR}' && for f in '${SOURCE_PATH}'/src/tool_*.c '${SOURCE_PATH}'/src/slist_wc.c; do [ -f \"$f\" ] && cc -Dmain=curl_main -DHAVE_CONFIG_H -DCURL_STATICLIB -include '${CURL_BUILD_REL}/lib/curl_config.h' -I'${SOURCE_PATH}/include' -I'${SOURCE_PATH}/lib' -I'${SOURCE_PATH}/src' -I'${CURL_BUILD_REL}/lib' -I'${CURL_BUILD_REL}/include' -I'${CURRENT_INSTALLED_DIR}/include' -c \"$f\" -o \"$(basename $f .c).o\" || exit 1; done && ar rcs '${CURRENT_PACKAGES_DIR}/lib/libcurlmain.a' *.o"
+    COMMAND sh "${CURLMAIN_BUILD_DIR}/build_curlmain.sh"
     WORKING_DIRECTORY "${CURLMAIN_BUILD_DIR}"
     LOGNAME "curlmain-build-${TARGET_TRIPLET}"
 )

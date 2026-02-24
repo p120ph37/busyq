@@ -96,6 +96,19 @@ foreach(SUBLIB IN ITEMS
     endif()
 endforeach()
 
+# Remove readline/history shell.o stubs — bash provides the real implementations of
+# sh_single_quote, sh_set_lines_and_columns, sh_get_env_value, etc.
+# Both libreadline.a and libhistory.a contain fallback shell.o.
+foreach(RLIB IN ITEMS "libreadline.a" "libhistory.a")
+    if(EXISTS "${CURRENT_PACKAGES_DIR}/lib/${RLIB}")
+        vcpkg_execute_required_process(
+            COMMAND ar d "${CURRENT_PACKAGES_DIR}/lib/${RLIB}" shell.o
+            WORKING_DIRECTORY "${CURRENT_PACKAGES_DIR}/lib"
+            LOGNAME "strip-${RLIB}-shell-${TARGET_TRIPLET}"
+        )
+    endif()
+endforeach()
+
 # Install key headers
 file(INSTALL
     "${SOURCE_PATH}/shell.h"

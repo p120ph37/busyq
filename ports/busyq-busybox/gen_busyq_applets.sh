@@ -1,8 +1,12 @@
 #!/bin/sh
 # gen_busyq_applets.sh - Generate BUSYQ_BB_APPLET() entries from busybox build
 #
-# Parses busybox's generated include/applets.h to extract the applet
-# names, main functions, and flags (NOFORK/NOEXEC).
+# Preprocesses busybox's include/applets.h with autoconf.h so that IF_xxx
+# macros filter out disabled applets.  The default (#else) branch of
+# applets.h emits struct literals whose field count distinguishes types:
+#   { "name", "main", dir, suid }          → regular/ODDNAME (4 fields)
+#   { "name", "main", dir, suid, 1 }       → NOEXEC          (5 fields)
+#   { "name", "main", dir, suid, 1, 1 }    → NOFORK          (6 fields)
 #
 # Usage: gen_busyq_applets.sh <busybox-build-dir> <output-header>
 
@@ -29,57 +33,24 @@ cat > "$OUTPUT" << 'HEADER'
  */
 HEADER
 
-# The file has lines like:
-#   IF_xxx(APPLET(name, BB_DIR_xxx, BB_SUID_xxx))
-#   IF_xxx(APPLET_NOFORK(name, main, BB_DIR_xxx, BB_SUID_xxx, help))
-#   IF_xxx(APPLET_NOEXEC(name, main, BB_DIR_xxx, BB_SUID_xxx, help))
-#   IF_xxx(APPLET_ODDNAME(name, main, BB_DIR_xxx, BB_SUID_xxx, help))
-#
-# We only care about lines starting with IF_ (actual applet registrations,
-# not #define lines).
-
-# Filter to just IF_ lines (actual applet registrations)
-grep '^IF_' "$APPLETS_H" > /tmp/applet_lines.txt || true
-
-# APPLET_NOFORK(name, main, ...) -> name_main with NOFORK flag
-grep 'APPLET_NOFORK' /tmp/applet_lines.txt | \
-    sed 's/.*APPLET_NOFORK(//;s/)).*//' | \
-    while IFS=',' read -r name main rest; do
-        name=$(echo "$name" | tr -d ' ')
-        main=$(echo "$main" | tr -d ' ')
-        echo "BUSYQ_BB_APPLET(\"$name\", ${main}_main, BUSYQ_APPLET_NOFORK)"
-    done >> "$OUTPUT"
-
-# APPLET_NOEXEC(name, main, ...) -> name_main with NOEXEC flag
-grep 'APPLET_NOEXEC' /tmp/applet_lines.txt | \
-    sed 's/.*APPLET_NOEXEC(//;s/)).*//' | \
-    while IFS=',' read -r name main rest; do
-        name=$(echo "$name" | tr -d ' ')
-        main=$(echo "$main" | tr -d ' ')
-        echo "BUSYQ_BB_APPLET(\"$name\", ${main}_main, BUSYQ_APPLET_NOEXEC)"
-    done >> "$OUTPUT"
-
-# APPLET_ODDNAME(name, main, ...) -> main_main with no special flags
-grep 'APPLET_ODDNAME' /tmp/applet_lines.txt | \
-    sed 's/.*APPLET_ODDNAME(//;s/)).*//' | \
-    while IFS=',' read -r name main rest; do
-        name=$(echo "$name" | tr -d ' ')
-        main=$(echo "$main" | tr -d ' ')
-        echo "BUSYQ_BB_APPLET(\"$name\", ${main}_main, 0)"
-    done >> "$OUTPUT"
-
-# Regular APPLET(name, ...) -> name_main with no special flags
-# Exclude lines already handled above
-grep 'APPLET(' /tmp/applet_lines.txt | \
-    grep -v 'APPLET_NOFORK\|APPLET_NOEXEC\|APPLET_ODDNAME\|APPLET_SCRIPTED' | \
-    sed 's/.*APPLET(//;s/)).*//' | \
-    while IFS=',' read -r name rest; do
-        name=$(echo "$name" | tr -d ' ')
-        echo "BUSYQ_BB_APPLET(\"$name\", ${name}_main, 0)"
+# Preprocess with autoconf.h.  No control macros defined → falls into
+# the #else branch which emits { "name", "main", dir, suid[, noexec[, nofork]] }
+cc -E -include "$BB_BUILD/include/autoconf.h" "$APPLETS_H" 2>/dev/null | \
+    grep '^{' | \
+    sed 's/[{}]//g; s/,/ /g' | \
+    while read -r name main dir suid noexec nofork rest; do
+        # Strip quotes from name and main
+        name=$(echo "$name" | tr -d '"' | tr -d ' ')
+        main=$(echo "$main" | tr -d '"' | tr -d ' ')
+        if [ -n "$nofork" ]; then
+            echo "BUSYQ_BB_APPLET(\"$name\", ${main}_main, BUSYQ_APPLET_NOFORK)"
+        elif [ -n "$noexec" ]; then
+            echo "BUSYQ_BB_APPLET(\"$name\", ${main}_main, BUSYQ_APPLET_NOEXEC)"
+        else
+            echo "BUSYQ_BB_APPLET(\"$name\", ${main}_main, 0)"
+        fi
     done >> "$OUTPUT"
 
 echo "/* End of generated applet table */" >> "$OUTPUT"
 count=$(grep -c BUSYQ_BB_APPLET "$OUTPUT" || true)
 echo "Generated $count applet entries in $OUTPUT"
-
-rm -f /tmp/applet_lines.txt
