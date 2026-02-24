@@ -37,3 +37,53 @@ and build orchestration. The top-level CMakeLists.txt links everything together.
 - NOFORK applets run in-process for speed; others fork for isolation
 - Entry point always calls bash_main(); bash's own sh/POSIX-mode logic preserved
 - curl+jq main() renamed via -Dmain=curl_main / -Dmain=jq_main
+
+## Iterative development with Docker
+
+For iterative debugging and building without running the full Dockerfile,
+use the dev container script to get a shell inside the build environment:
+
+```sh
+source scripts/dev-container.sh
+dev-start          # starts dockerd + pulls image + launches container
+dev-build          # runs vcpkg install + cmake build
+dev-test           # runs smoke tests against the built binary
+dev-exec '<cmd>'   # run any command inside the container
+dev-stop           # tear down the container
+```
+
+### How it works
+The script launches a persistent `p120ph37/alpine-clang-vcpkg` container
+with the project directory bind-mounted at `/src`. It handles:
+- Starting dockerd with sandbox-compatible flags (no iptables/bridge/overlayfs)
+- Forwarding proxy environment variables into the container
+- Extracting and installing TLS-intercepting proxy CA certificates
+- Installing build dependencies (bison, flex, ncurses-dev, etc.)
+
+### Manual usage (without the script)
+```sh
+# Start dockerd (sandbox environments only)
+dockerd --iptables=false --ip6tables=false --bridge=none --storage-driver=vfs &
+
+# Launch container
+docker run -d --name busyq-dev \
+  -e "http_proxy=$http_proxy" -e "https_proxy=$https_proxy" \
+  -v "$(pwd):/src" -w /src \
+  p120ph37/alpine-clang-vcpkg:latest sleep infinity
+
+# Run commands
+docker exec -w /src busyq-dev vcpkg install
+docker exec -w /src busyq-dev cmake -B build -S . -DBUSYQ_SSL=OFF \
+  -D_VCPKG_INSTALLED_DIR=/src/vcpkg_installed -DVCPKG_TARGET_TRIPLET=x64-linux
+docker exec -w /src busyq-dev cmake --build build
+
+# Test
+docker exec -w /src busyq-dev ./build/busyq -c 'echo hello | awk "{print}"'
+```
+
+### Proxy CA certificates
+In environments with TLS-intercepting proxies (like Claude Code web), the
+container needs the proxy CA installed before `apk add` or `vcpkg install`
+will work. The `dev-container.sh` script handles this automatically. For
+manual setup, extract the CA from `/etc/ssl/certs/ca-certificates.crt` on
+the host and append it to the same file inside the container.
