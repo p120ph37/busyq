@@ -38,6 +38,23 @@ and build orchestration. The top-level CMakeLists.txt links everything together.
 - All tools registered in src/applet_table.c as {name, main_func} entries
 - Multi-call packages (coreutils) use one dispatch entry point that routes on argv[0]
 
+### All libraries via vcpkg (no system libraries except musl)
+Every library dependency must be built via vcpkg — never use system-installed
+libraries from `apk add`. This ensures full LTO (`-flto`) is applied across
+the entire binary, including dependencies. The `alpine-clang-vcpkg` base image
+propagates LTO flags through `EXTRA_CFLAGS`/`EXTRA_LDFLAGS` to all vcpkg builds.
+
+Examples of dependencies handled this way:
+- **ncurses** — needed by bash/readline; built via vcpkg `ncurses` port
+  (not `apk add ncurses-dev`)
+- **mbedtls** — needed for SSL variant; built via vcpkg `mbedtls` port
+- **oniguruma** — needed by jq; built via vcpkg `oniguruma` port
+- **brotli, zstd, zlib, nghttp2** — needed by curl; all built via vcpkg
+
+The only system-level packages installed via `apk add` should be build-time
+tools that don't produce linked libraries (bison, flex, perl, etc.) and
+linux-headers for kernel API definitions.
+
 ### Symbol isolation (critical for multi-package linking)
 Multiple GNU packages embed gnulib, causing symbol collisions (xmalloc,
 hash_insert, yyparse, etc.) when statically linked into one binary. Each
