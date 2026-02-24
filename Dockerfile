@@ -1,6 +1,6 @@
 # Dockerfile - Multi-stage build for busyq
 #
-# Builds two variants of the busyq binary:
+# Builds two variants of the busyq binary (bash+curl+jq+coreutils):
 #   1. busyq      - No SSL (smaller)
 #   2. busyq-ssl  - With mbedtls + embedded Mozilla CA bundle
 #
@@ -80,6 +80,9 @@ FROM alpine:latest AS test
 COPY --from=build /src/out/busyq /busyq
 COPY --from=build /src/out/busyq-ssl /busyq-ssl
 RUN /busyq -c 'echo "bash: ok"' \
+    && /busyq -c 'ls /' > /dev/null \
+    && /busyq -c 'cat /dev/null' \
+    && /busyq -c 'date +%s' > /dev/null \
     && /busyq -c 'jq -n "{test: true}"' \
     && /busyq -c 'curl --version' > /dev/null \
     && /busyq-ssl -c 'curl --version' | grep -qi tls \

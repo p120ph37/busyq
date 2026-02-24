@@ -35,7 +35,7 @@ target_include_directories(busyq PRIVATE
 # --- Link order matters for static libraries ---
 # bash depends on readline, which depends on ncurses
 # The overall link order: bash > builtins > readline > history > glob > tilde > sh >
-#   curl > nghttp2 > zlib > brotli > zstd > jq > oniguruma > ncurses > [mbedtls] > system
+#   coreutils > curl > nghttp2 > zlib > brotli > zstd > jq > oniguruma > ncurses > [mbedtls] > system
 
 set(BUSYQ_LINK_LIBS "")
 
@@ -47,6 +47,9 @@ find_library(LIB_HISTORY history PATHS "${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_T
 find_library(LIB_GLOB glob PATHS "${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/lib" NO_DEFAULT_PATH)
 find_library(LIB_TILDE tilde PATHS "${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/lib" NO_DEFAULT_PATH)
 find_library(LIB_SH sh PATHS "${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/lib" NO_DEFAULT_PATH)
+
+# Coreutils (single-binary multi-call)
+find_library(LIB_COREUTILS coreutils PATHS "${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/lib" NO_DEFAULT_PATH)
 
 # Curl (library + tool main)
 find_library(LIB_CURL curl PATHS "${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/lib" NO_DEFAULT_PATH)
@@ -94,6 +97,11 @@ if(LIB_TILDE)
 endif()
 if(LIB_SH)
     list(APPEND BUSYQ_LINK_LIBS ${LIB_SH})
+endif()
+
+# Coreutils
+if(LIB_COREUTILS)
+    list(APPEND BUSYQ_LINK_LIBS ${LIB_COREUTILS})
 endif()
 
 # Curl

@@ -4,6 +4,7 @@
   "description": "Single-binary bash+curl+jq for distroless containers",
   "dependencies": [
     "busyq-bash",
+    "busyq-coreutils",
     "busyq-jq",
     "ncurses",
     "oniguruma",
