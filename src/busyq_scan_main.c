@@ -96,41 +96,27 @@ const struct busyq_applet *busyq_find_applet(const char *name)
 }
 
 /* ------------------------------------------------------------------ */
-/* Applet registry (loaded from applets.def)                           */
+/* Applet registry (compiled-in from applets.h)                        */
+/*                                                                     */
+/* The scanner always needs the full registry for classification, so   */
+/* we include all applets (no BUSYQ_CUSTOM_APPLETS).  ssl_client is    */
+/* explicitly enabled since the scanner doesn't link against SSL libs  */
+/* but still needs to classify it.                                     */
 /* ------------------------------------------------------------------ */
 
-#define MAX_APPLETS 256
-
 struct applet_entry {
-    char module[64];
-    char command[64];
+    const char *module;
+    const char *command;
 };
 
-static struct applet_entry applet_reg[MAX_APPLETS];
-static int num_applets = 0;
+#define APPLET_ssl_client 1
+#define APPLET(mod, cmd, func) { #mod, #cmd },
+static const struct applet_entry applet_reg[] = {
+#include "applets.h"
+};
+#undef APPLET
 
-static void load_applets_def(const char *path)
-{
-    FILE *f = fopen(path, "r");
-    if (!f)
-        return;
-
-    char line[256];
-    while (fgets(line, sizeof(line), f) && num_applets < MAX_APPLETS) {
-        char *p = line;
-        while (*p == ' ' || *p == '\t') p++;
-        if (*p == '#' || *p == '\n' || *p == '\0')
-            continue;
-
-        char module[64], command[64], func[64];
-        if (sscanf(p, "%63s %63s %63s", module, command, func) >= 2) {
-            strncpy(applet_reg[num_applets].module, module, sizeof(applet_reg[0].module) - 1);
-            strncpy(applet_reg[num_applets].command, command, sizeof(applet_reg[0].command) - 1);
-            num_applets++;
-        }
-    }
-    fclose(f);
-}
+static const int num_applets = sizeof(applet_reg) / sizeof(applet_reg[0]);
 
 static const char *find_applet_module(const char *name)
 {
@@ -320,38 +306,10 @@ static void usage(const char *prog, int code)
         "  --cmake         Output a cmake -D definition for BUSYQ_APPLETS\n"
         "  --json          Output in JSON format\n"
         "  --raw           Output raw tab-separated records\n"
-        "  --def <path>    Path to applets.def (default: auto-detect)\n"
         "  -q, --quiet     Suppress informational output\n"
         "  -h, --help      Show this help\n",
         prog);
     exit(code);
-}
-
-/* ------------------------------------------------------------------ */
-/* Find applets.def                                                    */
-/* ------------------------------------------------------------------ */
-
-static const char *find_applets_def(const char *argv0)
-{
-    static char path[4096];
-    const char *slash = strrchr(argv0, '/');
-
-    if (slash) {
-        int dir_len = slash - argv0;
-        snprintf(path, sizeof(path), "%.*s/../src/applets.def", dir_len, argv0);
-        if (access(path, R_OK) == 0) return path;
-        snprintf(path, sizeof(path), "%.*s/applets.def", dir_len, argv0);
-        if (access(path, R_OK) == 0) return path;
-    }
-
-    if (access("src/applets.def", R_OK) == 0)
-        return "src/applets.def";
-    if (access("/usr/share/busyq/applets.def", R_OK) == 0)
-        return "/usr/share/busyq/applets.def";
-    if (access("/usr/local/share/busyq/applets.def", R_OK) == 0)
-        return "/usr/local/share/busyq/applets.def";
-
-    return NULL;
 }
 
 /* ------------------------------------------------------------------ */
@@ -641,7 +599,6 @@ int main(int argc, char **argv)
 {
     enum output_mode mode = MODE_REPORT;
     int quiet = 0;
-    const char *def_path = NULL;
     int file_start = 0;
     int i;
 
@@ -652,7 +609,6 @@ int main(int argc, char **argv)
         else if (strcmp(argv[i], "--json") == 0) mode = MODE_JSON;
         else if (strcmp(argv[i], "--raw") == 0) mode = MODE_RAW;
         else if (strcmp(argv[i], "-q") == 0 || strcmp(argv[i], "--quiet") == 0) quiet = 1;
-        else if (strcmp(argv[i], "--def") == 0 && i + 1 < argc) def_path = argv[++i];
         else if (strcmp(argv[i], "-h") == 0 || strcmp(argv[i], "--help") == 0) usage(argv[0], 0);
         else if (argv[i][0] == '-' && strcmp(argv[i], "--") != 0) {
             fprintf(stderr, "Unknown option: %s\n", argv[i]);
@@ -666,11 +622,6 @@ int main(int argc, char **argv)
         fprintf(stderr, "Error: no input files\n");
         usage(argv[0], 1);
     }
-
-    if (!def_path)
-        def_path = find_applets_def(argv[0]);
-    if (def_path)
-        load_applets_def(def_path);
 
     /* bash_main() calls exit() when done parsing, so we register our
      * output handler via atexit() and set globals for it to use. */

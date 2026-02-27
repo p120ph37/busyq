@@ -17,8 +17,9 @@ project(busyq C)
 # Custom build workflow:
 #   1. Build libbusyq.a once (expensive: vcpkg ports + LTO compilation)
 #   2. Run:  busyq-scan myscript.sh --applets
-#   3. Run:  scripts/gen-applet-table.sh --applets 'curl;ls;cat' -o at.c
-#   4. Link: cc -flto -static -Os at.c -Isrc/ libbusyq.a -lm -ldl -lpthread -o busyq
+#   3. Compile: cc -DBUSYQ_CUSTOM_APPLETS -DAPPLET_curl=1 -DAPPLET_ls=1 \
+#               -flto -static -Os src/applets.c -Isrc/ libbusyq.a \
+#               -lm -ldl -lpthread -o busyq
 #      (Fast: no vcpkg rebuild, just compile one .c + final link w/ LTO)
 
 set(CMAKE_C_STANDARD 11)
@@ -146,10 +147,11 @@ endif()
 # libbusyq.a — merged archive of main.o + all component libraries
 #
 # Contains everything needed for a busyq binary EXCEPT the applet
-# dispatch table (applet_table.c).  Distributed as an LTO-enabled
+# dispatch table (applets.c).  Distributed as an LTO-enabled
 # artifact so users can link a custom applet table quickly:
 #
-#   cc -flto -static at.c -Isrc/ libbusyq.a -lm -ldl -lpthread -o busyq
+#   cc -DBUSYQ_CUSTOM_APPLETS -DAPPLET_curl=1 -flto -static \
+#      src/applets.c -Isrc/ libbusyq.a -lm -ldl -lpthread -o busyq
 #
 # Uses an ar MRI script to merge all archives + object files into one.
 # =====================================================================
@@ -175,48 +177,17 @@ add_custom_command(
 add_custom_target(busyq-lib DEPENDS "${BUSYQ_LIB}")
 
 # =====================================================================
-# Applet table — full or filtered
+# Applet table — full or filtered via preprocessor
 #
-# If BUSYQ_APPLETS is set, generate a filtered applet_table.c at
-# configure time using gen-applet-table.sh.  Otherwise use the
-# static src/applet_table.c (all applets).
+# src/applets.c includes src/applets.h (X-macro registry).  Filtering
+# is done at compile time: -DBUSYQ_CUSTOM_APPLETS plus individual
+# -DAPPLET_<name>=1 flags select which applets to include.  No code
+# generation step is needed.
+#
+# When BUSYQ_APPLETS is set (semicolon-separated list), CMake converts
+# it to the appropriate compile definitions.
 # =====================================================================
-if(BUSYQ_APPLETS)
-    set(_gen_script "${CMAKE_CURRENT_SOURCE_DIR}/scripts/gen-applet-table.sh")
-    set(_applets_def "${CMAKE_CURRENT_SOURCE_DIR}/src/applets.def")
-    set(_gen_output "${CMAKE_CURRENT_BINARY_DIR}/applet_table_gen.c")
-
-    execute_process(
-        COMMAND bash "${_gen_script}"
-            --def "${_applets_def}"
-            --applets "${BUSYQ_APPLETS}"
-            --output "${_gen_output}"
-        RESULT_VARIABLE _gen_result
-    )
-    if(NOT _gen_result EQUAL 0)
-        message(FATAL_ERROR "gen-applet-table.sh failed (exit ${_gen_result})")
-    endif()
-
-    # Report which modules are active
-    execute_process(
-        COMMAND bash "${_gen_script}"
-            --def "${_applets_def}"
-            --applets "${BUSYQ_APPLETS}"
-            --list-modules
-        OUTPUT_VARIABLE _active_modules
-        OUTPUT_STRIP_TRAILING_WHITESPACE
-    )
-    message(STATUS "busyq: custom applet build — modules: ${_active_modules}")
-
-    set(APPLET_TABLE_SRC "${_gen_output}")
-else()
-    set(APPLET_TABLE_SRC src/applet_table.c)
-endif()
-
-# =====================================================================
-# busyq binary — applet table linked against libbusyq.a
-# =====================================================================
-add_executable(busyq ${APPLET_TABLE_SRC})
+add_executable(busyq src/applets.c)
 
 target_include_directories(busyq PRIVATE
     src
@@ -226,6 +197,14 @@ target_include_directories(busyq PRIVATE
 
 if(BUSYQ_SSL)
     target_compile_definitions(busyq PRIVATE BUSYQ_SSL)
+endif()
+
+if(BUSYQ_APPLETS)
+    target_compile_definitions(busyq PRIVATE BUSYQ_CUSTOM_APPLETS)
+    foreach(_applet ${BUSYQ_APPLETS})
+        target_compile_definitions(busyq PRIVATE "APPLET_${_applet}=1")
+    endforeach()
+    message(STATUS "busyq: custom applet build — ${BUSYQ_APPLETS}")
 endif()
 
 # Link against the merged library
@@ -293,8 +272,7 @@ if(TARGET busyq-scan)
     install(TARGETS busyq-scan RUNTIME DESTINATION bin)
 endif()
 
-# Install the library and header for custom builds
+# Install the library and headers for custom builds
 install(FILES "${BUSYQ_LIB}" DESTINATION lib OPTIONAL)
-install(FILES src/applet_table.h DESTINATION include/busyq)
-install(FILES src/applets.def DESTINATION share/busyq)
-install(PROGRAMS scripts/gen-applet-table.sh DESTINATION share/busyq)
+install(FILES src/applet_table.h src/applets.h DESTINATION include/busyq)
+install(FILES src/applets.c DESTINATION share/busyq)

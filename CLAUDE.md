@@ -7,13 +7,14 @@ Always launches as bash, with all bundled tools available as pseudo-builtins.
 
 ## Project layout
 - `src/` - C source for entry point, applet table, and scanner
-- `src/applets.def` - Canonical applet registry (machine-readable)
+- `src/applets.h` - X-macro applet registry (single source of truth)
+- `src/applets.c` - Applet dispatch table (consumes applets.h, handles filtering)
+- `src/applet_table.h` - Shared struct/API for applet lookup
 - `src/busyq_scan_main.c` - Scanner binary entry point + classifier
 - `src/busyq_scan_walk.c` - AST walker (compiled within bash port)
 - `src/busyq_scan.h` - Shared types for scanner components
 - `ports/` - vcpkg overlay ports (bash, curl, jq, coreutils, future tools)
-- `scripts/gen-applet-table.sh` - Generates applet_table.c from applets.def
-- `scripts/` - Other helper scripts (cert generation, dev container)
+- `scripts/` - Helper scripts (cert generation, dev container)
 - `CMakeLists.txt` - Builds libbusyq.a (library) + busyq + busyq-scan
 - `CMakePresets.json` - Build presets (vcpkg toolchain, no-ssl/ssl variants)
 - `Dockerfile` - Multi-stage build (uses p120ph37/alpine-clang-vcpkg)
@@ -42,8 +43,9 @@ cmake --preset no-ssl -DBUSYQ_APPLETS="cat;curl;jq;ls;mkdir;sort"
 cmake --build --preset no-ssl
 
 # 3b. Or link against the pre-built library (fast, no vcpkg needed)
-scripts/gen-applet-table.sh --applets 'cat;curl;jq;ls;mkdir;sort' -o at.c
-cc -flto -static -Os at.c -Isrc/ libbusyq.a -lm -ldl -lpthread -o busyq
+cc -DBUSYQ_CUSTOM_APPLETS -DAPPLET_cat=1 -DAPPLET_curl=1 -DAPPLET_jq=1 \
+   -DAPPLET_ls=1 -DAPPLET_mkdir=1 -DAPPLET_sort=1 \
+   -flto -static -Os src/applets.c -Isrc/ libbusyq.a -lm -ldl -lpthread -o busyq
 ```
 
 ### Build architecture (vcpkg overlay ports)
@@ -62,7 +64,9 @@ and build orchestration. The top-level CMakeLists.txt links everything together.
 - Bash command lookup patched in findcmd.c to check applet table before PATH
 - Entry point always calls bash_main(); bash's own sh/POSIX-mode logic preserved
 - Tool main() functions renamed via -Dmain=toolname_main at compile time
-- All tools registered in src/applet_table.c as {name, main_func} entries
+- All tools registered in src/applets.h (X-macro) and dispatched via src/applets.c
+- Applet filtering at compile time: -DBUSYQ_CUSTOM_APPLETS + -DAPPLET_<name>=1
+  allows LTO to strip unreferenced entry functions (no code generation needed)
 - Multi-call packages (coreutils) use one dispatch entry point that routes on argv[0]
 
 ### All libraries via vcpkg (no system libraries except musl)
