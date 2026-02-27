@@ -1,6 +1,6 @@
 {
   "name": "busyq-diffutils",
-  "version-string": "3.10",
+  "version-string": "3.12",
   "description": "GNU diffutils built as a static library for busyq",
   "license": "GPL-3.0-or-later",
   "dependencies": [

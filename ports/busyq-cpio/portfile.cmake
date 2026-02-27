@@ -1,12 +1,10 @@
-vcpkg_download_distfile(ARCHIVE
-    URLS "https://ftpmirror.gnu.org/gnu/cpio/cpio-2.15.tar.gz"
-         "https://mirrors.kernel.org/gnu/cpio/cpio-2.15.tar.gz"
-         "https://ftp.gnu.org/gnu/cpio/cpio-2.15.tar.gz"
-    FILENAME "cpio-2.15.tar.gz"
-    SHA512 7662e5185b7a056a0b0f68d14a3a0fbe77b0dfb993003f76717a5e0bb03dbdc38971f2b0df7a79db608859f336ccd84dd0b1a03c120fed52582bed6d47c86ecb
-)
+include("${CMAKE_CURRENT_LIST_DIR}/../../scripts/cmake/busyq_alpine_helpers.cmake")
 
-vcpkg_extract_source_archive(SOURCE_PATH ARCHIVE "${ARCHIVE}")
+busyq_alpine_source(
+    PORT_DIR "${CMAKE_CURRENT_LIST_DIR}"
+    OUT_SOURCE_PATH SOURCE_PATH
+    USE_PATCH_CMD
+)
 
 # Detect toolchain flags (CC, CFLAGS with LTO/optimization)
 vcpkg_cmake_get_vars(cmake_vars_file)

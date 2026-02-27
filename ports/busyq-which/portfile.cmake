@@ -1,12 +1,10 @@
-vcpkg_download_distfile(ARCHIVE
-    URLS "https://ftpmirror.gnu.org/gnu/which/which-2.21.tar.gz"
-         "https://mirrors.kernel.org/gnu/which/which-2.21.tar.gz"
-         "https://ftp.gnu.org/gnu/which/which-2.21.tar.gz"
-    FILENAME "which-2.21.tar.gz"
-    SHA512 d2f04a5c5291f2d7d1226982da7cf999d36cfe24d3f7bda145508efcfb359511251d3c68b860c0ddcedd66b15a0587b648a35ab6d1f173707565305c506dfc61
-)
+include("${CMAKE_CURRENT_LIST_DIR}/../../scripts/cmake/busyq_alpine_helpers.cmake")
 
-vcpkg_extract_source_archive(SOURCE_PATH ARCHIVE "${ARCHIVE}")
+busyq_alpine_source(
+    PORT_DIR "${CMAKE_CURRENT_LIST_DIR}"
+    OUT_SOURCE_PATH SOURCE_PATH
+    USE_PATCH_CMD
+)
 
 # Detect toolchain flags
 vcpkg_cmake_get_vars(cmake_vars_file)

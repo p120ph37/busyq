@@ -33,7 +33,10 @@ RUN apk add --no-cache \
     texinfo \
     perl \
     linux-headers \
-    xz
+    xz \
+    ed \
+    patch \
+    gettext-dev
 
 # Copy project files
 COPY . /src

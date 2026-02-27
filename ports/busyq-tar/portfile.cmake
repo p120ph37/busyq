@@ -1,12 +1,10 @@
-vcpkg_download_distfile(ARCHIVE
-    URLS "https://ftpmirror.gnu.org/gnu/tar/tar-1.35.tar.xz"
-         "https://mirrors.kernel.org/gnu/tar/tar-1.35.tar.xz"
-         "https://ftp.gnu.org/gnu/tar/tar-1.35.tar.xz"
-    FILENAME "tar-1.35.tar.xz"
-    SHA512 8b84ed661e6c878fa33eb5c1808d20351e6f40551ac63f96014fb0d0b9c72d5d94d8865d39e36bcb184fd250f84778a3b271bbd8bd2ceb69eece0c3568577510
-)
+include("${CMAKE_CURRENT_LIST_DIR}/../../scripts/cmake/busyq_alpine_helpers.cmake")
 
-vcpkg_extract_source_archive(SOURCE_PATH ARCHIVE "${ARCHIVE}")
+busyq_alpine_source(
+    PORT_DIR "${CMAKE_CURRENT_LIST_DIR}"
+    OUT_SOURCE_PATH SOURCE_PATH
+    USE_PATCH_CMD
+)
 
 # Detect toolchain flags (CC, CFLAGS with LTO/optimization)
 vcpkg_cmake_get_vars(cmake_vars_file)

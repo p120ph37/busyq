@@ -23,9 +23,38 @@ PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 # is named alpine-source-<subdir>.cmake. This supports multi-source ports
 # like zip (which has separate zip and unzip upstream packages).
 declare -A PORT_MAP
+# Phase 0-1: Core (bash, coreutils, curl, jq)
+PORT_MAP[busyq-bash]="main/bash"
+PORT_MAP[busyq-coreutils]="main/coreutils"
+PORT_MAP[busyq-curl]="main/curl"
+PORT_MAP[busyq-jq]="main/jq"
+# Phase 2: Text processing
+PORT_MAP[busyq-gawk]="main/gawk"
+PORT_MAP[busyq-sed]="main/sed"
+PORT_MAP[busyq-grep]="main/grep"
+PORT_MAP[busyq-diffutils]="main/diffutils"
+PORT_MAP[busyq-findutils]="main/findutils"
+PORT_MAP[busyq-ed]="main/ed"
+PORT_MAP[busyq-patch]="main/patch"
+# Phase 3: Archival
+PORT_MAP[busyq-tar]="main/tar"
+PORT_MAP[busyq-gzip]="main/gzip"
+PORT_MAP[busyq-bzip2]="main/bzip2"
+PORT_MAP[busyq-xz]="main/xz"
+PORT_MAP[busyq-cpio]="community/cpio"
+PORT_MAP[busyq-lzop]="community/lzop"
+PORT_MAP[busyq-zip]="main/zip:zip main/unzip:unzip"
+# Phase 4: Small standalone tools
+PORT_MAP[busyq-bc]="main/bc"
+PORT_MAP[busyq-less]="main/less"
+PORT_MAP[busyq-dos2unix]="community/dos2unix"
 PORT_MAP[busyq-sharutils]="main/sharutils"
 PORT_MAP[busyq-time]="community/time"
-PORT_MAP[busyq-zip]="main/zip:zip main/unzip:unzip"
+PORT_MAP[busyq-which]="main/which"
+# Phase 5: Networking
+PORT_MAP[busyq-wget]="main/wget"
+PORT_MAP[busyq-lsof]="main/lsof"
+# Phase 6: Process utilities
 PORT_MAP[busyq-procps]="main/procps-ng"
 PORT_MAP[busyq-psmisc]="main/psmisc"
 
@@ -79,6 +108,7 @@ sync_package() {
         # Provide empty build-time variables
         CBUILD="" CHOST="" CARCH="" CFLAGS="" CPPFLAGS="" LDFLAGS=""
         srcdir="" pkgdir="" startdir=""
+        BOOTSTRAP="" APORTS_BOOTSTRAP=""
 
         # shellcheck disable=SC1090
         . "$apkbuild"

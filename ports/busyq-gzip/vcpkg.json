@@ -1,6 +1,6 @@
 {
   "name": "busyq-gzip",
-  "version-string": "1.13",
+  "version-string": "1.14",
   "description": "GNU gzip built as a static library for busyq",
   "license": "GPL-3.0-or-later",
   "dependencies": [

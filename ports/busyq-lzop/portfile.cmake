@@ -1,10 +1,9 @@
-vcpkg_download_distfile(ARCHIVE
-    URLS "https://www.lzop.org/download/lzop-1.04.tar.gz"
-    FILENAME "lzop-1.04.tar.gz"
-    SHA512 5829b4495ffefab549aa697a05c536ce593c572c9eee6004460583a0090abcd317c6074c4f981dfee6be61ac8d127f02dd37053b6cb782af64db41586a8bbb6e
-)
+include("${CMAKE_CURRENT_LIST_DIR}/../../scripts/cmake/busyq_alpine_helpers.cmake")
 
-vcpkg_extract_source_archive(SOURCE_PATH ARCHIVE "${ARCHIVE}")
+busyq_alpine_source(
+    PORT_DIR "${CMAKE_CURRENT_LIST_DIR}"
+    OUT_SOURCE_PATH SOURCE_PATH
+)
 
 # Detect toolchain flags (CC, CFLAGS with LTO/optimization)
 vcpkg_cmake_get_vars(cmake_vars_file)

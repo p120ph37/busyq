@@ -1,11 +1,9 @@
-vcpkg_download_distfile(ARCHIVE
-    URLS "https://github.com/tukaani-project/xz/releases/download/v5.6.3/xz-5.6.3.tar.xz"
-         "https://tukaani.org/xz/xz-5.6.3.tar.xz"
-    FILENAME "xz-5.6.3.tar.xz"
-    SHA512 1449f3b55819fb7f46855e550e367e96d658f523531fc2a65c2e1f1b847de86bf2fa50f3909f42cbff94a56b0cf8b0b5cd278097622da980119548f61e245f0a
-)
+include("${CMAKE_CURRENT_LIST_DIR}/../../scripts/cmake/busyq_alpine_helpers.cmake")
 
-vcpkg_extract_source_archive(SOURCE_PATH ARCHIVE "${ARCHIVE}")
+busyq_alpine_source(
+    PORT_DIR "${CMAKE_CURRENT_LIST_DIR}"
+    OUT_SOURCE_PATH SOURCE_PATH
+)
 
 # Detect toolchain flags (CC, CFLAGS with LTO/optimization)
 vcpkg_cmake_get_vars(cmake_vars_file)

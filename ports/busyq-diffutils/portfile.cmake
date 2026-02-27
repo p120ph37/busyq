@@ -1,12 +1,10 @@
-vcpkg_download_distfile(ARCHIVE
-    URLS "https://ftpmirror.gnu.org/gnu/diffutils/diffutils-3.10.tar.xz"
-         "https://mirrors.kernel.org/gnu/diffutils/diffutils-3.10.tar.xz"
-         "https://ftp.gnu.org/gnu/diffutils/diffutils-3.10.tar.xz"
-    FILENAME "diffutils-3.10.tar.xz"
-    SHA512 219d2c815a120690c6589846271e43aee5c96c61a7ee4abbef97dfcdb3d6416652ed494b417de0ab6688c4322540d48be63b5e617beb6d20530b5d55d723ccbb
-)
+include("${CMAKE_CURRENT_LIST_DIR}/../../scripts/cmake/busyq_alpine_helpers.cmake")
 
-vcpkg_extract_source_archive(SOURCE_PATH ARCHIVE "${ARCHIVE}")
+busyq_alpine_source(
+    PORT_DIR "${CMAKE_CURRENT_LIST_DIR}"
+    OUT_SOURCE_PATH SOURCE_PATH
+    USE_PATCH_CMD
+)
 
 # Detect toolchain flags (CC, CFLAGS with LTO/optimization) before autotools
 # claims the build directory.

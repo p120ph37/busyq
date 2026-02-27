@@ -1,12 +1,9 @@
-vcpkg_download_distfile(ARCHIVE
-    URLS "https://ftpmirror.gnu.org/gnu/wget/wget-1.25.0.tar.gz"
-         "https://mirrors.kernel.org/gnu/wget/wget-1.25.0.tar.gz"
-         "https://ftp.gnu.org/gnu/wget/wget-1.25.0.tar.gz"
-    FILENAME "wget-1.25.tar.gz"
-    SHA512 a7ce33c07a1a206a8574b6e9ea7cc5292315df0914edbcf05a014d35ae9e3d24699a46818b409b884ada57428cf30502f4bbb3767cae2c6934e4e7fb2d0c5036
-)
+include("${CMAKE_CURRENT_LIST_DIR}/../../scripts/cmake/busyq_alpine_helpers.cmake")
 
-vcpkg_extract_source_archive(SOURCE_PATH ARCHIVE "${ARCHIVE}")
+busyq_alpine_source(
+    PORT_DIR "${CMAKE_CURRENT_LIST_DIR}"
+    OUT_SOURCE_PATH SOURCE_PATH
+)
 
 # Detect toolchain flags (CC, CFLAGS with LTO/optimization) before autotools
 # claims the build directory.

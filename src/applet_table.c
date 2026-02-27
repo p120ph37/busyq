@@ -48,8 +48,7 @@ extern int unzip_main(int argc, char **argv);
 
 /* Phase 4: Small standalone tools */
 extern int bc_main(int argc, char **argv);
-/* TODO: dc not built by bc port yet - needs configure fix */
-/* extern int dc_main(int argc, char **argv); */
+extern int dc_main(int argc, char **argv);
 extern int less_main(int argc, char **argv);
 extern int strings_main(int argc, char **argv);
 extern int time_main(int argc, char **argv);
@@ -244,7 +243,7 @@ static const struct busyq_applet applets[] = {
 
     /* --- Phase 4: Small standalone tools --- */
     { "bc",         bc_main,        0 },
-    /* { "dc",         dc_main,        0 }, */
+    { "dc",         dc_main,        0 },
     { "less",       less_main,      0 },
     { "strings",    strings_main,   0 },
     { "time",       time_main,      0 },

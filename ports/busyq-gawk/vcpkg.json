@@ -1,6 +1,6 @@
 {
   "name": "busyq-gawk",
-  "version-string": "5.3.1",
+  "version-string": "5.3.2",
   "description": "GNU gawk built as a static library for busyq",
   "license": "GPL-3.0-or-later",
   "dependencies": [

@@ -1,22 +1,21 @@
-vcpkg_download_distfile(ARCHIVE
-    URLS "https://curl.se/download/curl-8.18.0.tar.xz"
-    FILENAME "curl-8.18.0.tar.xz"
-    SHA512 50c7a7b0528e0019697b0c59b3e56abb2578c71d77e4c085b56797276094b5611718c0a9cb2b14db7f8ab502fcf8f42a364297a3387fae3870a4d281484ba21c
-)
+include("${CMAKE_CURRENT_LIST_DIR}/../../scripts/cmake/busyq_alpine_helpers.cmake")
 
 # SSL patches are guarded by #ifdef BUSYQ_EMBEDDED_CERTS / USE_MBEDTLS,
 # so they're safe to apply unconditionally.
 if("ssl" IN_LIST FEATURES)
     set(SSL_PATCHES
-        embedded-certs.patch
-        extra-certs-envvar.patch
+        "${CMAKE_CURRENT_LIST_DIR}/embedded-certs.patch"
+        "${CMAKE_CURRENT_LIST_DIR}/extra-certs-envvar.patch"
     )
 else()
     set(SSL_PATCHES "")
 endif()
 
-vcpkg_extract_source_archive(SOURCE_PATH ARCHIVE "${ARCHIVE}"
-    PATCHES ${SSL_PATCHES}
+busyq_alpine_source(
+    PORT_DIR "${CMAKE_CURRENT_LIST_DIR}"
+    OUT_SOURCE_PATH SOURCE_PATH
+    EXTRA_PATCHES ${SSL_PATCHES}
+    USE_PATCH_CMD
 )
 
 # Build curl with CMake (curl has native CMake support)

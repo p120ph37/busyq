@@ -1,12 +1,11 @@
-vcpkg_download_distfile(ARCHIVE
-    URLS "https://ftpmirror.gnu.org/gnu/gawk/gawk-5.3.1.tar.xz"
-         "https://mirrors.kernel.org/gnu/gawk/gawk-5.3.1.tar.xz"
-         "https://ftp.gnu.org/gnu/gawk/gawk-5.3.1.tar.xz"
-    FILENAME "gawk-5.3.1.tar.xz"
-    SHA512 c6b4c50ce565e6355ca162955072471e37541c51855c0011e834243a7390db8811344b0c974335844770e408e1f63d72d0d81459a081c392e0245c726019eaff
-)
+include("${CMAKE_CURRENT_LIST_DIR}/../../scripts/cmake/busyq_alpine_helpers.cmake")
 
-vcpkg_extract_source_archive(SOURCE_PATH ARCHIVE "${ARCHIVE}")
+busyq_alpine_source(
+    PORT_DIR "${CMAKE_CURRENT_LIST_DIR}"
+    OUT_SOURCE_PATH SOURCE_PATH
+    USE_PATCH_CMD
+    EXTRA_PATCHES "${CMAKE_CURRENT_LIST_DIR}/patches/custom/fix-extension-makefile-sed.patch"
+)
 
 # Detect toolchain flags (CC, CFLAGS with LTO/optimization) before autotools
 # claims the build directory.

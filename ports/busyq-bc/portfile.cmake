@@ -1,12 +1,13 @@
-vcpkg_download_distfile(ARCHIVE
-    URLS "https://ftpmirror.gnu.org/gnu/bc/bc-1.07.1.tar.gz"
-         "https://mirrors.kernel.org/gnu/bc/bc-1.07.1.tar.gz"
-         "https://ftp.gnu.org/gnu/bc/bc-1.07.1.tar.gz"
-    FILENAME "bc-1.07.1.tar.gz"
-    SHA512 02126d0db6b6ed06d56cfc292d6f5475ff1e574779d7e69c7809bbb1e13f946f57ea07da2a7666baa092507a951a822044b0970075f75eefe65a5c1999b75d34
-)
+# busyq-bc portfile - GNU bc and dc, uses Alpine-synced source
+#
+# Version: 1.08.2 (synced from Alpine 3.23-stable, zero patches)
 
-vcpkg_extract_source_archive(SOURCE_PATH ARCHIVE "${ARCHIVE}")
+include("${CMAKE_CURRENT_LIST_DIR}/../../scripts/cmake/busyq_alpine_helpers.cmake")
+
+busyq_alpine_source(
+    PORT_DIR "${CMAKE_CURRENT_LIST_DIR}"
+    OUT_SOURCE_PATH SOURCE_PATH
+)
 
 # Detect toolchain flags
 vcpkg_cmake_get_vars(cmake_vars_file)
@@ -57,15 +58,20 @@ vcpkg_execute_required_process(
     COMMAND sh -c "
         set -e
 
-        # Rename main in bc/main.o and dc/main.o before combining
-        if [ -f bc/main.o ]
-then
-            objcopy --redefine-sym main=bc_main_orig bc/main.o
-        fi
-        if [ -f dc/main.o ]
-then
-            objcopy --redefine-sym main=dc_main_orig dc/main.o
-        fi
+        # Rename main in bc and dc objects before combining.
+        # bc 1.08.2 puts main in bc/main.o and dc/dc.o (not dc/main.o).
+        for f in bc/main.o bc/bc.o; do
+            if [ -f \"\$f\" ] && nm \"\$f\" | grep -q ' T main$'; then
+                objcopy --redefine-sym main=bc_main_orig \"\$f\"
+                break
+            fi
+        done
+        for f in dc/main.o dc/dc.o; do
+            if [ -f \"\$f\" ] && nm \"\$f\" | grep -q ' T main$'; then
+                objcopy --redefine-sym main=dc_main_orig \"\$f\"
+                break
+            fi
+        done
 
         # Rebuild raw archive with renamed mains
         find bc dc lib -name '*.o' 2>/dev/null | xargs ar rcs libbc_raw.a

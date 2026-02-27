@@ -1,10 +1,9 @@
-vcpkg_download_distfile(ARCHIVE
-    URLS "https://www.greenwoodsoftware.com/less/less-661.tar.gz"
-    FILENAME "less-661.tar.gz"
-    SHA512 49d81ff9e79d43ce0271490e3bffd590b4aed5fcb387bc8eb3128de99e5b5a5ede2e2818b546f6e3a140fa6261f1de3dfba1231f7ff7ef18502bb7030eaea1b5
-)
+include("${CMAKE_CURRENT_LIST_DIR}/../../scripts/cmake/busyq_alpine_helpers.cmake")
 
-vcpkg_extract_source_archive(SOURCE_PATH ARCHIVE "${ARCHIVE}")
+busyq_alpine_source(
+    PORT_DIR "${CMAKE_CURRENT_LIST_DIR}"
+    OUT_SOURCE_PATH SOURCE_PATH
+)
 
 # Detect toolchain flags
 vcpkg_cmake_get_vars(cmake_vars_file)

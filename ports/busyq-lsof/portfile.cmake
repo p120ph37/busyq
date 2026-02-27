@@ -1,10 +1,10 @@
-vcpkg_download_distfile(ARCHIVE
-    URLS "https://github.com/lsof-org/lsof/releases/download/4.99.3/lsof-4.99.3.tar.gz"
-    FILENAME "lsof-4.99.3.tar.gz"
-    SHA512 83f62f62fa273becfdded4e553d398bafebf0186c7f8ac86a800dabf63ef0614c3c546b6dcd6d13f30c97ab33088a82e1e6b66cc8ed61f700c54487cab19d009
-)
+include("${CMAKE_CURRENT_LIST_DIR}/../../scripts/cmake/busyq_alpine_helpers.cmake")
 
-vcpkg_extract_source_archive(SOURCE_PATH ARCHIVE "${ARCHIVE}")
+busyq_alpine_source(
+    PORT_DIR "${CMAKE_CURRENT_LIST_DIR}"
+    OUT_SOURCE_PATH SOURCE_PATH
+    USE_PATCH_CMD
+)
 
 # Detect toolchain flags (CC, CFLAGS with LTO/optimization) before autotools
 # claims the build directory.
@@ -25,7 +25,9 @@ vcpkg_configure_make(
         --enable-static
 )
 
-vcpkg_build_make()
+# lsof 4.99.5 builds man pages requiring soelim (groff). Build only the
+# binary and library targets we need, skipping documentation.
+vcpkg_build_make(BUILD_TARGET lsof)
 
 set(LSOF_BUILD_REL "${CURRENT_BUILDTREES_DIR}/${TARGET_TRIPLET}-rel")
 

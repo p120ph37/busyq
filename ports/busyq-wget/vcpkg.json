@@ -1,6 +1,6 @@
 {
   "name": "busyq-wget",
-  "version-string": "1.25",
+  "version-string": "1.25.0",
   "description": "GNU wget built as a static library for busyq",
   "license": "GPL-3.0-or-later",
   "dependencies": [

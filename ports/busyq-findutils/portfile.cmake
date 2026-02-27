@@ -1,12 +1,10 @@
-vcpkg_download_distfile(ARCHIVE
-    URLS "https://ftpmirror.gnu.org/gnu/findutils/findutils-4.10.0.tar.xz"
-         "https://mirrors.kernel.org/gnu/findutils/findutils-4.10.0.tar.xz"
-         "https://ftp.gnu.org/gnu/findutils/findutils-4.10.0.tar.xz"
-    FILENAME "findutils-4.10.0.tar.xz"
-    SHA512 b8b683d21cd26c6da4f41c56e83cadbda4780f8610a2bbd4b4e34bb1f339c3209721974b03e076d5eef0331fd876d947b398197aad37c29bbcc2e0405c641b34
-)
+include("${CMAKE_CURRENT_LIST_DIR}/../../scripts/cmake/busyq_alpine_helpers.cmake")
 
-vcpkg_extract_source_archive(SOURCE_PATH ARCHIVE "${ARCHIVE}")
+busyq_alpine_source(
+    PORT_DIR "${CMAKE_CURRENT_LIST_DIR}"
+    OUT_SOURCE_PATH SOURCE_PATH
+    USE_PATCH_CMD
+)
 
 # Detect toolchain flags (CC, CFLAGS with LTO/optimization) before autotools
 # claims the build directory.

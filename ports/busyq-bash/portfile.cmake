@@ -14,6 +14,17 @@ vcpkg_extract_source_archive(SOURCE_PATH
         applet-execute.patch
 )
 
+# Apply official GNU bash incremental patches (5.3.1 through 5.3.3).
+# These use -p0 format from the parent directory (../bash-5.3/file),
+# matching Alpine's application method.
+foreach(_patch_num 001 002 003)
+    vcpkg_execute_required_process(
+        COMMAND patch -p0 -i "${CMAKE_CURRENT_LIST_DIR}/patches/bash53-${_patch_num}.patch"
+        WORKING_DIRECTORY "${SOURCE_PATH}"
+        LOGNAME "bash-patch-${_patch_num}"
+    )
+endforeach()
+
 # Copy applet table header into bash source tree so compilation can find it
 file(COPY
     "${CURRENT_PORT_DIR}/../../src/applet_table.h"

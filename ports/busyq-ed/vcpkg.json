@@ -1,6 +1,6 @@
 {
   "name": "busyq-ed",
-  "version-string": "1.20.2",
+  "version-string": "1.22.2",
   "description": "GNU ed built as a static library for busyq",
   "license": "GPL-3.0-or-later",
   "dependencies": [

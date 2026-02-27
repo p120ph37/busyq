@@ -140,7 +140,8 @@ dev-start() {
     # Install build dependencies
     echo "dev-container: installing build dependencies..."
     docker exec "${DEV_CONTAINER_NAME}" \
-        apk add --no-cache bison flex linux-headers perl xz 2>&1 | tail -1
+        apk add --no-cache bison flex linux-headers perl xz \
+        autoconf automake libtool texinfo ed patch gettext-dev 2>&1 | tail -1
 
     echo "dev-container: ready. Use 'dev-exec <cmd>' to run commands."
 }

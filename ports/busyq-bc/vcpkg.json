@@ -1,6 +1,6 @@
 {
   "name": "busyq-bc",
-  "version-string": "1.07.1",
+  "version-string": "1.08.2",
   "description": "GNU bc built as a static library for busyq",
   "license": "GPL-3.0-or-later",
   "dependencies": [

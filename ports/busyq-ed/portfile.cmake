@@ -1,12 +1,9 @@
-vcpkg_download_distfile(ARCHIVE
-    URLS "https://ftpmirror.gnu.org/gnu/ed/ed-1.20.2.tar.lz"
-         "https://mirrors.kernel.org/gnu/ed/ed-1.20.2.tar.lz"
-         "https://ftp.gnu.org/gnu/ed/ed-1.20.2.tar.lz"
-    FILENAME "ed-1.20.2.tar.lz"
-    SHA512 5efad386399035329892d8349500544f76e1b18406e164aae35af872c15a0935d412dd4a6996bd15b960d0e899857cc7d8657805f441b1b9f2ae3d73c73dcf4f
-)
+include("${CMAKE_CURRENT_LIST_DIR}/../../scripts/cmake/busyq_alpine_helpers.cmake")
 
-vcpkg_extract_source_archive(SOURCE_PATH ARCHIVE "${ARCHIVE}")
+busyq_alpine_source(
+    PORT_DIR "${CMAKE_CURRENT_LIST_DIR}"
+    OUT_SOURCE_PATH SOURCE_PATH
+)
 
 # Detect toolchain flags (CC, CFLAGS with LTO/optimization) before autotools
 # claims the build directory.

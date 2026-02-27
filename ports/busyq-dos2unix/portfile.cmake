@@ -1,10 +1,9 @@
-vcpkg_download_distfile(ARCHIVE
-    URLS "https://waterlan.home.xs4all.nl/dos2unix/dos2unix-7.5.2.tar.gz"
-    FILENAME "dos2unix-7.5.2.tar.gz"
-    SHA512 d76d799435dd248850f72cc50af2144a51e99f04ea83a1447c4edd828625c83f0afba367da51aa83defced4cbf34f3b75387a0821010f7b212225571036efbb2
-)
+include("${CMAKE_CURRENT_LIST_DIR}/../../scripts/cmake/busyq_alpine_helpers.cmake")
 
-vcpkg_extract_source_archive(SOURCE_PATH ARCHIVE "${ARCHIVE}")
+busyq_alpine_source(
+    PORT_DIR "${CMAKE_CURRENT_LIST_DIR}"
+    OUT_SOURCE_PATH SOURCE_PATH
+)
 
 # Detect toolchain flags
 vcpkg_cmake_get_vars(cmake_vars_file)

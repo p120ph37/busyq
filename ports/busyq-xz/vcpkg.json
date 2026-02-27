@@ -1,6 +1,6 @@
 {
   "name": "busyq-xz",
-  "version-string": "5.6.3",
+  "version-string": "5.8.2",
   "description": "xz-utils built as a static library for busyq",
   "license": "0BSD",
   "dependencies": [
