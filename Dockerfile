@@ -4,10 +4,15 @@
 #   1. busyq      - No SSL (smaller)
 #   2. busyq-ssl  - With mbedtls + embedded Mozilla CA bundle
 #
+# Also produces LTO library artifacts for custom builds:
+#   3. libbusyq.a     - No-SSL merged library (LTO bitcode)
+#   4. libbusyq-ssl.a - SSL merged library (LTO bitcode)
+#   5. busyq-dev/     - Headers + scripts for custom builds
+#
 # Usage:
 #   docker buildx build --output=out .
 #
-# The output directory will contain both binaries.
+# The output directory will contain binaries, libraries, and dev files.
 
 # ============================================================
 # Stage 1: Build environment
@@ -44,11 +49,12 @@ WORKDIR /src
 # package installation (via vcpkg.json manifest) during cmake configure.
 RUN cmake --preset no-ssl && cmake --build --preset no-ssl
 
-# Strip and compress
+# Strip and compress binary; also copy library artifact
 RUN strip --strip-all build/no-ssl/busyq \
-    && mkdir -p out \
+    && mkdir -p out/busyq-dev \
     && cp build/no-ssl/busyq out/busyq \
-    && upx --best --lzma out/busyq || true
+    && cp build/no-ssl/libbusyq.a out/libbusyq.a \
+    && (upx --best --lzma out/busyq || true)
 
 # ---- Build variant 2: with SSL ----
 # Generate embedded CA certificates (needed before vcpkg builds curl[ssl])
@@ -58,10 +64,17 @@ RUN scripts/generate-certs.sh src
 # to install the ssl feature dependencies (mbedtls, curl[ssl]).
 RUN cmake --preset ssl && cmake --build --preset ssl
 
-# Strip and compress
+# Strip and compress binary; also copy library artifact
 RUN strip --strip-all build/ssl/busyq \
     && cp build/ssl/busyq out/busyq-ssl \
-    && upx --best --lzma out/busyq-ssl || true
+    && cp build/ssl/libbusyq.a out/libbusyq-ssl.a \
+    && (upx --best --lzma out/busyq-ssl || true)
+
+# ---- Copy dev files for custom builds ----
+RUN cp src/applet_table.h out/busyq-dev/ \
+    && cp src/applets.def out/busyq-dev/ \
+    && cp scripts/gen-applet-table.sh out/busyq-dev/ \
+    && cp scripts/busyq-scan out/busyq-dev/
 
 # ============================================================
 # Stage 2: Smoke tests
@@ -79,8 +92,11 @@ RUN /busyq -c 'echo "bash: ok"' \
     && echo "All smoke tests passed"
 
 # ============================================================
-# Stage 3: Extract binaries
+# Stage 3: Extract binaries + libraries
 # ============================================================
 FROM scratch AS output
 COPY --from=build /src/out/busyq /busyq
 COPY --from=build /src/out/busyq-ssl /busyq-ssl
+COPY --from=build /src/out/libbusyq.a /libbusyq.a
+COPY --from=build /src/out/libbusyq-ssl.a /libbusyq-ssl.a
+COPY --from=build /src/out/busyq-dev/ /busyq-dev/

@@ -7,9 +7,12 @@ Always launches as bash, with all bundled tools available as pseudo-builtins.
 
 ## Project layout
 - `src/` - C source for entry point and applet table
+- `src/applets.def` - Canonical applet registry (machine-readable)
 - `ports/` - vcpkg overlay ports (bash, curl, jq, coreutils, future tools)
-- `scripts/` - Helper scripts (cert generation, dev container)
-- `CMakeLists.txt` - Final link step
+- `scripts/busyq-scan` - Bash script command analyzer
+- `scripts/gen-applet-table.sh` - Generates applet_table.c from applets.def
+- `scripts/` - Other helper scripts (cert generation, dev container)
+- `CMakeLists.txt` - Builds libbusyq.a (library) + busyq (binary)
 - `CMakePresets.json` - Build presets (vcpkg toolchain, no-ssl/ssl variants)
 - `Dockerfile` - Multi-stage build (uses p120ph37/alpine-clang-vcpkg)
 - `PLAN.md` - Roadmap for adding upstream GNU tool replacements
@@ -18,7 +21,28 @@ Always launches as bash, with all bundled tools available as pseudo-builtins.
 ```sh
 docker buildx build --output=out .
 ```
-Produces `out/busyq` (no SSL) and `out/busyq-ssl` (with mbedtls).
+Produces:
+- `out/busyq` and `out/busyq-ssl` — full binaries
+- `out/libbusyq.a` and `out/libbusyq-ssl.a` — LTO library artifacts
+- `out/busyq-dev/` — headers and scripts for custom builds
+
+### Custom builds (minimal binary for a specific script)
+```sh
+# 1. Scan a bash script to find what commands it uses
+scripts/busyq-scan myscript.sh
+
+# 2. Get the applet list in cmake format
+scripts/busyq-scan --cmake myscript.sh
+#  → -DBUSYQ_APPLETS=cat;curl;jq;ls;mkdir;sort
+
+# 3a. Build with cmake (if in the build environment)
+cmake --preset no-ssl -DBUSYQ_APPLETS="cat;curl;jq;ls;mkdir;sort"
+cmake --build --preset no-ssl
+
+# 3b. Or link against the pre-built library (fast, no vcpkg needed)
+scripts/gen-applet-table.sh --applets 'cat;curl;jq;ls;mkdir;sort' -o at.c
+cc -flto -static -Os at.c -Isrc/ libbusyq.a -lm -ldl -lpthread -o busyq
+```
 
 ### Build architecture (vcpkg overlay ports)
 Each component is a vcpkg overlay port in `ports/`:

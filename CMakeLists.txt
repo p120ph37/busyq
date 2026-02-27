@@ -3,41 +3,35 @@ project(busyq C)
 
 # busyq - Single-binary bash+curl+jq (+ upstream GNU tools)
 #
-# This CMakeLists.txt compiles the busyq entry point and applet table,
-# then links everything together with the static libraries produced by
-# the vcpkg overlay ports (busyq-bash, busyq-curl, busyq-jq, and
-# future upstream tool ports).
+# This CMakeLists.txt does two things:
+#
+# 1. Produces libbusyq.a — a merged static archive (LLVM LTO bitcode)
+#    containing the entry point (main.c) plus all component libraries
+#    (bash, coreutils, curl, jq, etc.), but NOT the applet dispatch
+#    table.  This library is the artifact for custom builds.
+#
+# 2. Produces the busyq binary — libbusyq.a linked with an applet
+#    table (full or filtered).  The applet table is the only piece
+#    that varies between a full build and a minimal custom build.
+#
+# Custom build workflow:
+#   1. Build libbusyq.a once (expensive: vcpkg ports + LTO compilation)
+#   2. Run:  scripts/busyq-scan myscript.sh --applets
+#   3. Run:  scripts/gen-applet-table.sh --applets 'curl;ls;cat' -o at.c
+#   4. Link: cc -flto -static -Os at.c -Isrc/ libbusyq.a -lm -ldl -lpthread -o busyq
+#      (Fast: no vcpkg rebuild, just compile one .c + final link w/ LTO)
 
 set(CMAKE_C_STANDARD 11)
 
 # Options
 option(BUSYQ_SSL "Build with mbedTLS SSL support and embedded certificates" OFF)
+set(BUSYQ_APPLETS "" CACHE STRING
+    "Semicolon-separated applet names to include (empty string = all)")
 
+# =====================================================================
 # Find libraries installed by our overlay ports
 # These are found via CMAKE_PREFIX_PATH set by vcpkg toolchain
-
-# --- busyq source files ---
-add_executable(busyq
-    src/main.c
-    src/applet_table.c
-)
-
-target_include_directories(busyq PRIVATE
-    src
-    ${CMAKE_CURRENT_BINARY_DIR}
-)
-
-# vcpkg-installed headers (oniguruma, curl, jq, etc.)
-target_include_directories(busyq PRIVATE
-    "${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/include"
-)
-
-# --- Link order matters for static libraries ---
-# bash depends on readline, which depends on ncurses
-# The overall link order: bash > builtins > readline > history > glob > tilde > sh >
-#   coreutils > curl > nghttp2 > zlib > brotli > zstd > jq > oniguruma > ncurses > [mbedtls] > system
-
-set(BUSYQ_LINK_LIBS "")
+# =====================================================================
 
 # Bash libraries
 find_library(LIB_BASH bash PATHS "${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/lib" NO_DEFAULT_PATH)
@@ -75,111 +69,180 @@ if(NOT LIB_NCURSES)
     find_library(LIB_NCURSES ncurses PATHS "${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/lib" NO_DEFAULT_PATH)
 endif()
 
-# Assemble link list
-# Bash
-if(LIB_BASH)
-    list(APPEND BUSYQ_LINK_LIBS ${LIB_BASH})
-endif()
-if(LIB_BUILTINS)
-    list(APPEND BUSYQ_LINK_LIBS ${LIB_BUILTINS})
-endif()
-if(LIB_READLINE)
-    list(APPEND BUSYQ_LINK_LIBS ${LIB_READLINE})
-endif()
-if(LIB_HISTORY)
-    list(APPEND BUSYQ_LINK_LIBS ${LIB_HISTORY})
-endif()
-if(LIB_GLOB)
-    list(APPEND BUSYQ_LINK_LIBS ${LIB_GLOB})
-endif()
-if(LIB_TILDE)
-    list(APPEND BUSYQ_LINK_LIBS ${LIB_TILDE})
-endif()
-if(LIB_SH)
-    list(APPEND BUSYQ_LINK_LIBS ${LIB_SH})
-endif()
-
-# Coreutils
-if(LIB_COREUTILS)
-    list(APPEND BUSYQ_LINK_LIBS ${LIB_COREUTILS})
-endif()
-
-# Curl
-if(LIB_CURLMAIN)
-    list(APPEND BUSYQ_LINK_LIBS ${LIB_CURLMAIN})
-endif()
-if(LIB_CURL)
-    list(APPEND BUSYQ_LINK_LIBS ${LIB_CURL})
-endif()
-
-# Curl dependencies (compression + HTTP/2, linked after curl)
-if(LIB_NGHTTP2)
-    list(APPEND BUSYQ_LINK_LIBS ${LIB_NGHTTP2})
-endif()
-if(LIB_Z)
-    list(APPEND BUSYQ_LINK_LIBS ${LIB_Z})
-endif()
-if(LIB_BROTLIDEC)
-    list(APPEND BUSYQ_LINK_LIBS ${LIB_BROTLIDEC})
-endif()
-if(LIB_BROTLICOMMON)
-    list(APPEND BUSYQ_LINK_LIBS ${LIB_BROTLICOMMON})
-endif()
-if(LIB_ZSTD)
-    list(APPEND BUSYQ_LINK_LIBS ${LIB_ZSTD})
-endif()
-
-# jq
-if(LIB_JQMAIN)
-    list(APPEND BUSYQ_LINK_LIBS ${LIB_JQMAIN})
-endif()
-if(LIB_JQ)
-    list(APPEND BUSYQ_LINK_LIBS ${LIB_JQ})
-endif()
-
-# Oniguruma
-if(LIB_ONIG)
-    list(APPEND BUSYQ_LINK_LIBS ${LIB_ONIG})
-endif()
-
-# ncurses (after oniguruma, before SSL — readline depends on ncurses)
-if(LIB_NCURSES)
-    list(APPEND BUSYQ_LINK_LIBS ${LIB_NCURSES})
-endif()
-
-# SSL: mbedtls libraries + ssl_client applet
+# SSL: mbedtls libraries (conditional)
 if(BUSYQ_SSL)
-    target_sources(busyq PRIVATE src/ssl_client_mbedtls.c)
-    target_compile_definitions(busyq PRIVATE BUSYQ_SSL)
-    if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/src/embedded_certs.h")
-        target_compile_definitions(busyq PRIVATE BUSYQ_EMBEDDED_CERTS)
-    endif()
-
     find_library(LIB_MBEDTLS mbedtls PATHS "${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/lib" NO_DEFAULT_PATH)
     find_library(LIB_MBEDX509 mbedx509 PATHS "${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/lib" NO_DEFAULT_PATH)
     find_library(LIB_MBEDCRYPTO mbedcrypto PATHS "${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/lib" NO_DEFAULT_PATH)
-    if(LIB_MBEDTLS)
-        list(APPEND BUSYQ_LINK_LIBS ${LIB_MBEDTLS})
+endif()
+
+# =====================================================================
+# Assemble the ordered list of component libraries
+# Link order matters for static libraries.
+# =====================================================================
+set(BUSYQ_COMPONENT_LIBS "")
+
+# Bash
+foreach(_lib LIB_BASH LIB_BUILTINS LIB_READLINE LIB_HISTORY LIB_GLOB LIB_TILDE LIB_SH)
+    if(${_lib})
+        list(APPEND BUSYQ_COMPONENT_LIBS ${${_lib}})
     endif()
-    if(LIB_MBEDX509)
-        list(APPEND BUSYQ_LINK_LIBS ${LIB_MBEDX509})
+endforeach()
+
+# Coreutils
+if(LIB_COREUTILS)
+    list(APPEND BUSYQ_COMPONENT_LIBS ${LIB_COREUTILS})
+endif()
+
+# Curl
+foreach(_lib LIB_CURLMAIN LIB_CURL LIB_NGHTTP2 LIB_Z LIB_BROTLIDEC LIB_BROTLICOMMON LIB_ZSTD)
+    if(${_lib})
+        list(APPEND BUSYQ_COMPONENT_LIBS ${${_lib}})
     endif()
-    if(LIB_MBEDCRYPTO)
-        list(APPEND BUSYQ_LINK_LIBS ${LIB_MBEDCRYPTO})
+endforeach()
+
+# jq
+foreach(_lib LIB_JQMAIN LIB_JQ LIB_ONIG)
+    if(${_lib})
+        list(APPEND BUSYQ_COMPONENT_LIBS ${${_lib}})
+    endif()
+endforeach()
+
+# ncurses
+if(LIB_NCURSES)
+    list(APPEND BUSYQ_COMPONENT_LIBS ${LIB_NCURSES})
+endif()
+
+# SSL
+if(BUSYQ_SSL)
+    foreach(_lib LIB_MBEDTLS LIB_MBEDX509 LIB_MBEDCRYPTO)
+        if(${_lib})
+            list(APPEND BUSYQ_COMPONENT_LIBS ${${_lib}})
+        endif()
+    endforeach()
+endif()
+
+# =====================================================================
+# main.o — compiled as an object library so it can go into both
+# the merged libbusyq.a and the final executable
+# =====================================================================
+add_library(busyq_main OBJECT src/main.c)
+target_include_directories(busyq_main PRIVATE
+    src
+    ${CMAKE_CURRENT_BINARY_DIR}
+    "${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/include"
+)
+
+# SSL sources are part of the library (not the applet table)
+if(BUSYQ_SSL)
+    target_sources(busyq_main PRIVATE src/ssl_client_mbedtls.c)
+    target_compile_definitions(busyq_main PRIVATE BUSYQ_SSL)
+    if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/src/embedded_certs.h")
+        target_compile_definitions(busyq_main PRIVATE BUSYQ_EMBEDDED_CERTS)
     endif()
 endif()
 
-# System libraries (musl libc — already LTO-enabled in alpine-clang-vcpkg)
-list(APPEND BUSYQ_LINK_LIBS
-    m
-    dl
-    pthread
+# =====================================================================
+# libbusyq.a — merged archive of main.o + all component libraries
+#
+# Contains everything needed for a busyq binary EXCEPT the applet
+# dispatch table (applet_table.c).  Distributed as an LTO-enabled
+# artifact so users can link a custom applet table quickly:
+#
+#   cc -flto -static at.c -Isrc/ libbusyq.a -lm -ldl -lpthread -o busyq
+#
+# Uses an ar MRI script to merge all archives + object files into one.
+# =====================================================================
+set(BUSYQ_LIB "${CMAKE_CURRENT_BINARY_DIR}/libbusyq.a")
+set(BUSYQ_MRI "${CMAKE_CURRENT_BINARY_DIR}/libbusyq.mri")
+
+# Generate the MRI script at configure time
+set(_mri_content "create ${BUSYQ_LIB}\n")
+string(APPEND _mri_content "addmod $<TARGET_OBJECTS:busyq_main>\n")
+foreach(_lib ${BUSYQ_COMPONENT_LIBS})
+    string(APPEND _mri_content "addlib ${_lib}\n")
+endforeach()
+string(APPEND _mri_content "save\nend\n")
+file(GENERATE OUTPUT "${BUSYQ_MRI}" CONTENT "${_mri_content}")
+
+add_custom_command(
+    OUTPUT "${BUSYQ_LIB}"
+    COMMAND ${CMAKE_AR} -M < "${BUSYQ_MRI}"
+    DEPENDS busyq_main "${BUSYQ_MRI}" ${BUSYQ_COMPONENT_LIBS}
+    COMMENT "Merging component libraries into libbusyq.a"
+    VERBATIM
+)
+add_custom_target(busyq-lib DEPENDS "${BUSYQ_LIB}")
+
+# =====================================================================
+# Applet table — full or filtered
+#
+# If BUSYQ_APPLETS is set, generate a filtered applet_table.c at
+# configure time using gen-applet-table.sh.  Otherwise use the
+# static src/applet_table.c (all applets).
+# =====================================================================
+if(BUSYQ_APPLETS)
+    set(_gen_script "${CMAKE_CURRENT_SOURCE_DIR}/scripts/gen-applet-table.sh")
+    set(_applets_def "${CMAKE_CURRENT_SOURCE_DIR}/src/applets.def")
+    set(_gen_output "${CMAKE_CURRENT_BINARY_DIR}/applet_table_gen.c")
+
+    execute_process(
+        COMMAND bash "${_gen_script}"
+            --def "${_applets_def}"
+            --applets "${BUSYQ_APPLETS}"
+            --output "${_gen_output}"
+        RESULT_VARIABLE _gen_result
+    )
+    if(NOT _gen_result EQUAL 0)
+        message(FATAL_ERROR "gen-applet-table.sh failed (exit ${_gen_result})")
+    endif()
+
+    # Report which modules are active
+    execute_process(
+        COMMAND bash "${_gen_script}"
+            --def "${_applets_def}"
+            --applets "${BUSYQ_APPLETS}"
+            --list-modules
+        OUTPUT_VARIABLE _active_modules
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+    )
+    message(STATUS "busyq: custom applet build — modules: ${_active_modules}")
+
+    set(APPLET_TABLE_SRC "${_gen_output}")
+else()
+    set(APPLET_TABLE_SRC src/applet_table.c)
+endif()
+
+# =====================================================================
+# busyq binary — applet table linked against libbusyq.a
+# =====================================================================
+add_executable(busyq ${APPLET_TABLE_SRC})
+
+target_include_directories(busyq PRIVATE
+    src
+    ${CMAKE_CURRENT_BINARY_DIR}
+    "${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/include"
 )
 
-target_link_libraries(busyq PRIVATE ${BUSYQ_LINK_LIBS})
+if(BUSYQ_SSL)
+    target_compile_definitions(busyq PRIVATE BUSYQ_SSL)
+endif()
+
+# Link against the merged library
+target_link_libraries(busyq PRIVATE "${BUSYQ_LIB}" m dl pthread)
+add_dependencies(busyq busyq-lib)
 
 # Static linking
 target_link_options(busyq PRIVATE -static -Wl,--gc-sections)
 
+# =====================================================================
 # Install
+# =====================================================================
 install(TARGETS busyq RUNTIME DESTINATION bin)
+
+# Install the library and header for custom builds
+install(FILES "${BUSYQ_LIB}" DESTINATION lib OPTIONAL)
+install(FILES src/applet_table.h DESTINATION include/busyq)
+install(FILES src/applets.def DESTINATION share/busyq)
+install(PROGRAMS scripts/gen-applet-table.sh DESTINATION share/busyq)
+install(PROGRAMS scripts/busyq-scan DESTINATION bin)

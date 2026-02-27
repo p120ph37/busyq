@@ -1,0 +1,139 @@
+# busyq applet registry — single source of truth
+#
+# Format: MODULE  COMMAND  ENTRY_FUNCTION  [CONDITION]
+#
+# MODULE:         Package name (determines which library to link)
+# COMMAND:        Command name as seen by the user
+# ENTRY_FUNCTION: C function name (renamed main)
+# CONDITION:      Optional C preprocessor guard (e.g., BUSYQ_SSL)
+#
+# Modules and their vcpkg ports / libraries:
+#   core       - busyq built-in (no external library needed)
+#   curl       - busyq-curl: libcurlmain + libcurl + nghttp2/zlib/brotli/zstd
+#   jq         - busyq-jq: libjqmain + libjq + libonig
+#   ssl        - mbedtls: libmbedtls + libmbedx509 + libmbedcrypto
+#   coreutils  - busyq-coreutils: libcoreutils
+#
+# When adding a new upstream package (see PLAN.md), add its applet
+# entries here with a new module name and update CMakeLists.txt to
+# conditionally link the corresponding library.
+
+# --- busyq meta ---
+core        busyq       busyq_help_main
+
+# --- curl ---
+curl        curl        curl_main
+
+# --- jq ---
+jq          jq          jq_main
+
+# --- ssl_client (SSL variant only) ---
+ssl         ssl_client  ssl_client_main     BUSYQ_SSL
+
+# --- GNU coreutils (single-binary dispatch on argv[0]) ---
+coreutils   arch        coreutils_main
+coreutils   b2sum       coreutils_main
+coreutils   base32      coreutils_main
+coreutils   base64      coreutils_main
+coreutils   basename    coreutils_main
+coreutils   basenc      coreutils_main
+coreutils   cat         coreutils_main
+coreutils   chcon       coreutils_main
+coreutils   chgrp       coreutils_main
+coreutils   chmod       coreutils_main
+coreutils   chown       coreutils_main
+coreutils   chroot      coreutils_main
+coreutils   cksum       coreutils_main
+coreutils   comm        coreutils_main
+coreutils   cp          coreutils_main
+coreutils   csplit      coreutils_main
+coreutils   cut         coreutils_main
+coreutils   date        coreutils_main
+coreutils   dd          coreutils_main
+coreutils   df          coreutils_main
+coreutils   dir         coreutils_main
+coreutils   dircolors   coreutils_main
+coreutils   dirname     coreutils_main
+coreutils   du          coreutils_main
+coreutils   echo        coreutils_main
+coreutils   env         coreutils_main
+coreutils   expand      coreutils_main
+coreutils   expr        coreutils_main
+coreutils   factor      coreutils_main
+coreutils   false       coreutils_main
+coreutils   fmt         coreutils_main
+coreutils   fold        coreutils_main
+coreutils   groups      coreutils_main
+coreutils   head        coreutils_main
+coreutils   hostid      coreutils_main
+coreutils   id          coreutils_main
+coreutils   install     coreutils_main
+coreutils   join        coreutils_main
+coreutils   kill        coreutils_main
+coreutils   link        coreutils_main
+coreutils   ln          coreutils_main
+coreutils   logname     coreutils_main
+coreutils   ls          coreutils_main
+coreutils   md5sum      coreutils_main
+coreutils   mkdir       coreutils_main
+coreutils   mkfifo      coreutils_main
+coreutils   mknod       coreutils_main
+coreutils   mktemp      coreutils_main
+coreutils   mv          coreutils_main
+coreutils   nice        coreutils_main
+coreutils   nl          coreutils_main
+coreutils   nohup       coreutils_main
+coreutils   nproc       coreutils_main
+coreutils   numfmt      coreutils_main
+coreutils   od          coreutils_main
+coreutils   paste       coreutils_main
+coreutils   pathchk     coreutils_main
+coreutils   pinky       coreutils_main
+coreutils   pr          coreutils_main
+coreutils   printenv    coreutils_main
+coreutils   printf      coreutils_main
+coreutils   ptx         coreutils_main
+coreutils   pwd         coreutils_main
+coreutils   readlink    coreutils_main
+coreutils   realpath    coreutils_main
+coreutils   rm          coreutils_main
+coreutils   rmdir       coreutils_main
+coreutils   runcon      coreutils_main
+coreutils   seq         coreutils_main
+coreutils   sha1sum     coreutils_main
+coreutils   sha224sum   coreutils_main
+coreutils   sha256sum   coreutils_main
+coreutils   sha384sum   coreutils_main
+coreutils   sha512sum   coreutils_main
+coreutils   shred       coreutils_main
+coreutils   shuf        coreutils_main
+coreutils   sleep       coreutils_main
+coreutils   sort        coreutils_main
+coreutils   split       coreutils_main
+coreutils   stat        coreutils_main
+coreutils   stty        coreutils_main
+coreutils   sum         coreutils_main
+coreutils   sync        coreutils_main
+coreutils   tac         coreutils_main
+coreutils   tail        coreutils_main
+coreutils   tee         coreutils_main
+coreutils   test        coreutils_main
+coreutils   [           coreutils_main
+coreutils   timeout     coreutils_main
+coreutils   touch       coreutils_main
+coreutils   tr          coreutils_main
+coreutils   true        coreutils_main
+coreutils   truncate    coreutils_main
+coreutils   tsort       coreutils_main
+coreutils   tty         coreutils_main
+coreutils   uname       coreutils_main
+coreutils   unexpand    coreutils_main
+coreutils   uniq        coreutils_main
+coreutils   unlink      coreutils_main
+coreutils   uptime      coreutils_main
+coreutils   users       coreutils_main
+coreutils   vdir        coreutils_main
+coreutils   wc          coreutils_main
+coreutils   who         coreutils_main
+coreutils   whoami      coreutils_main
+coreutils   yes         coreutils_main
