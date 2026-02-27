@@ -1,7 +1,8 @@
 vcpkg_download_distfile(ARCHIVE
     URLS "https://sourceware.org/pub/bzip2/bzip2-1.0.8.tar.gz"
+         "https://mirrors.kernel.org/sources.redhat.com/bzip2/bzip2-1.0.8.tar.gz"
     FILENAME "bzip2-1.0.8.tar.gz"
-    SHA512 0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+    SHA512 083f5e675d73f3233c7930ebe20425a533feedeaaa9d8cc86831312a6581cefbe6ed0d08d2fa89be81082f2a5abdabca8b3c080bf97218a1bd59dc118a30b9f3
 )
 
 vcpkg_extract_source_archive(SOURCE_PATH ARCHIVE "${ARCHIVE}")
@@ -25,7 +26,8 @@ vcpkg_execute_required_process(
         set -e
         CC='${BZ_CC}'
         CFLAGS='${BZ_CFLAGS} -D_FILE_OFFSET_BITS=64'
-        for f in blocksort.c huffman.c crctable.c randtable.c compress.c decompress.c bzlib.c bzip2.c; do
+        for f in blocksort.c huffman.c crctable.c randtable.c compress.c decompress.c bzlib.c bzip2.c
+do
             \$CC \$CFLAGS -I'${SOURCE_PATH}' -c '${SOURCE_PATH}/'\$f -o \${f%.c}.o
         done
     "

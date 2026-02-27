@@ -3,7 +3,7 @@ vcpkg_download_distfile(ARCHIVE
          "https://mirrors.kernel.org/gnu/time/time-1.9.tar.gz"
          "https://ftp.gnu.org/gnu/time/time-1.9.tar.gz"
     FILENAME "time-1.9.tar.gz"
-    SHA512 0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+    SHA512 5c6dabbbe71e9103a47b892b86bb914c1704122d4fe7dff1e2cbd28503297163118d295077d8e062b035d673a1f91c36f8a45c7383f374fd766942b32bde4406
 )
 
 vcpkg_extract_source_archive(SOURCE_PATH ARCHIVE "${ARCHIVE}")
@@ -14,6 +14,17 @@ include("${cmake_vars_file}")
 
 set(TIME_CC "${VCPKG_DETECTED_CMAKE_C_COMPILER}")
 set(TIME_CFLAGS "${VCPKG_DETECTED_CMAKE_C_FLAGS} ${VCPKG_DETECTED_CMAKE_C_FLAGS_RELEASE}")
+
+# GNU time 1.9 is old C (K&R style) that doesn't include <string.h>.
+# Modern clang treats implicit function declarations as errors.
+set(_resuse "${SOURCE_PATH}/src/resuse.c")
+if(EXISTS "${_resuse}")
+    file(READ "${_resuse}" _content)
+    if(NOT _content MATCHES "#include <string\\.h>")
+        string(REPLACE "#include \"config.h\"" "#include \"config.h\"\n#include <string.h>" _content "${_content}")
+        file(WRITE "${_resuse}" "${_content}")
+    endif()
+endif()
 
 set(ENV{FORCE_UNSAFE_CONFIGURE} "1")
 

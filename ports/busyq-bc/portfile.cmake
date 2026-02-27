@@ -3,7 +3,7 @@ vcpkg_download_distfile(ARCHIVE
          "https://mirrors.kernel.org/gnu/bc/bc-1.07.1.tar.gz"
          "https://ftp.gnu.org/gnu/bc/bc-1.07.1.tar.gz"
     FILENAME "bc-1.07.1.tar.gz"
-    SHA512 0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+    SHA512 02126d0db6b6ed06d56cfc292d6f5475ff1e574779d7e69c7809bbb1e13f946f57ea07da2a7666baa092507a951a822044b0970075f75eefe65a5c1999b75d34
 )
 
 vcpkg_extract_source_archive(SOURCE_PATH ARCHIVE "${ARCHIVE}")
@@ -58,10 +58,12 @@ vcpkg_execute_required_process(
         set -e
 
         # Rename main in bc/main.o and dc/main.o before combining
-        if [ -f bc/main.o ]; then
+        if [ -f bc/main.o ]
+then
             objcopy --redefine-sym main=bc_main_orig bc/main.o
         fi
-        if [ -f dc/main.o ]; then
+        if [ -f dc/main.o ]
+then
             objcopy --redefine-sym main=dc_main_orig dc/main.o
         fi
 

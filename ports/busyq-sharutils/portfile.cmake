@@ -3,7 +3,7 @@ vcpkg_download_distfile(ARCHIVE
          "https://mirrors.kernel.org/gnu/sharutils/sharutils-4.15.2.tar.xz"
          "https://ftp.gnu.org/gnu/sharutils/sharutils-4.15.2.tar.xz"
     FILENAME "sharutils-4.15.2.tar.xz"
-    SHA512 0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+    SHA512 80d0b804a0617e11e5c23dc0d59b218bbf93e40aaf5e9a5401a18ef9cb700390aab711e2b2e2f26c8fd5b8ef99a91d3405e01d02cadabcba7639979314e59f8d
 )
 
 vcpkg_extract_source_archive(SOURCE_PATH ARCHIVE "${ARCHIVE}")
@@ -16,6 +16,29 @@ set(SHAR_CC "${VCPKG_DETECTED_CMAKE_C_COMPILER}")
 set(SHAR_CFLAGS "${VCPKG_DETECTED_CMAKE_C_FLAGS} ${VCPKG_DETECTED_CMAKE_C_FLAGS_RELEASE}")
 
 set(ENV{FORCE_UNSAFE_CONFIGURE} "1")
+
+# sharutils 4.15.2 needs two patches for modern clang:
+# 1. NLS functions called without headers (add libintl.h)
+# 2. program_name defined in both .h and .c without extern (use -fcommon)
+foreach(_src shar.c unshar.c uuencode.c uudecode.c)
+    set(_file "${SOURCE_PATH}/src/${_src}")
+    if(EXISTS "${_file}")
+        file(READ "${_file}" _content)
+        if(NOT _content MATCHES "#include <libintl\\.h>")
+            file(WRITE "${_file}" "#include <libintl.h>\n${_content}")
+        endif()
+    endif()
+endforeach()
+
+# Fix tentative definition of program_name in opts headers (missing extern)
+foreach(_hdr shar-opts.h unshar-opts.h uuencode-opts.h uudecode-opts.h)
+    set(_file "${SOURCE_PATH}/src/${_hdr}")
+    if(EXISTS "${_file}")
+        file(READ "${_file}" _content)
+        string(REPLACE "char const * const program_name;" "extern char const * const program_name;" _content "${_content}")
+        file(WRITE "${_file}" "${_content}")
+    endif()
+endforeach()
 
 vcpkg_configure_make(
     SOURCE_PATH "${SOURCE_PATH}"
@@ -56,10 +79,12 @@ vcpkg_execute_required_process(
         set -e
 
         # Rename main in uuencode.o and uudecode.o before combining
-        if [ -f src/uuencode.o ]; then
+        if [ -f src/uuencode.o ]
+then
             objcopy --redefine-sym main=uuencode_main_orig src/uuencode.o
         fi
-        if [ -f src/uudecode.o ]; then
+        if [ -f src/uudecode.o ]
+then
             objcopy --redefine-sym main=uudecode_main_orig src/uudecode.o
         fi
 

@@ -3,7 +3,7 @@ vcpkg_download_distfile(ARCHIVE
          "https://mirrors.kernel.org/gnu/diffutils/diffutils-3.10.tar.xz"
          "https://ftp.gnu.org/gnu/diffutils/diffutils-3.10.tar.xz"
     FILENAME "diffutils-3.10.tar.xz"
-    SHA512 0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+    SHA512 219d2c815a120690c6589846271e43aee5c96c61a7ee4abbef97dfcdb3d6416652ed494b417de0ab6688c4322540d48be63b5e617beb6d20530b5d55d723ccbb
 )
 
 vcpkg_extract_source_archive(SOURCE_PATH ARCHIVE "${ARCHIVE}")
@@ -54,9 +54,11 @@ endif()
 vcpkg_execute_required_process(
     COMMAND sh -c "
         set -e
-        for tool in diff cmp diff3 sdiff; do
+        for tool in diff cmp diff3 sdiff
+do
             obj='${DU_BUILD_REL}/src/'\"\$tool\".o
-            if [ -f \"\$obj\" ]; then
+            if [ -f \"\$obj\" ]
+then
                 objcopy --redefine-sym main=\"\${tool}_main_orig\" \"\$obj\"
             fi
         done

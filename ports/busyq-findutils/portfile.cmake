@@ -3,7 +3,7 @@ vcpkg_download_distfile(ARCHIVE
          "https://mirrors.kernel.org/gnu/findutils/findutils-4.10.0.tar.xz"
          "https://ftp.gnu.org/gnu/findutils/findutils-4.10.0.tar.xz"
     FILENAME "findutils-4.10.0.tar.xz"
-    SHA512 0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+    SHA512 b8b683d21cd26c6da4f41c56e83cadbda4780f8610a2bbd4b4e34bb1f339c3209721974b03e076d5eef0331fd876d947b398197aad37c29bbcc2e0405c641b34
 )
 
 vcpkg_extract_source_archive(SOURCE_PATH ARCHIVE "${ARCHIVE}")
@@ -59,15 +59,18 @@ vcpkg_execute_required_process(
     COMMAND sh -c "
         set -e
         # find's main is in find/ftsfind.o or find/find.o
-        for obj in '${FU_BUILD_REL}/find/ftsfind.o' '${FU_BUILD_REL}/find/find.o'; do
-            if [ -f \"\$obj\" ] && nm \"\$obj\" 2>/dev/null | grep -q ' T main\$'; then
+        for obj in '${FU_BUILD_REL}/find/ftsfind.o' '${FU_BUILD_REL}/find/find.o'
+do
+            if [ -f \"\$obj\" ] && nm \"\$obj\" 2>/dev/null | grep -q ' T main\$'
+then
                 objcopy --redefine-sym main=find_main_orig \"\$obj\"
                 break
             fi
         done
         # xargs's main is in xargs/xargs.o
         obj='${FU_BUILD_REL}/xargs/xargs.o'
-        if [ -f \"\$obj\" ]; then
+        if [ -f \"\$obj\" ]
+then
             objcopy --redefine-sym main=xargs_main_orig \"\$obj\"
         fi
     "

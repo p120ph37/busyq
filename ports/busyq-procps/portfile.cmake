@@ -2,7 +2,7 @@ vcpkg_download_distfile(ARCHIVE
     URLS "https://sourceforge.net/projects/procps-ng/files/Production/procps-ng-4.0.4.tar.xz"
          "https://gitlab.com/procps-ng/procps/-/archive/v4.0.4/procps-v4.0.4.tar.gz"
     FILENAME "procps-ng-4.0.4.tar.xz"
-    SHA512 0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+    SHA512 94375544e2422fefc23d7634063c49ef1be62394c46039444f85e6d2e87e45cfadc33accba5ca43c96897b4295bfb0f88d55a30204598ddb26ef66f0420cefb4
 )
 
 vcpkg_extract_source_archive(SOURCE_PATH ARCHIVE "${ARCHIVE}")
@@ -82,17 +82,19 @@ vcpkg_execute_required_process(
         # Step 2: For each object file that defines a 'main' symbol,
         # rename main → <basename>_main_orig so we can identify them after prefixing.
         # Only process tool source .o files, not library .o files.
-        for obj in src/*.o src/*/*.o; do
-            [ -f \"\\$obj\" ] || continue
-            if nm \"\\$obj\" 2>/dev/null | grep -q ' T main$'; then
-                bn=\\$(basename \"\\$obj\" .o)
-                objcopy --redefine-sym main=\\${bn}_main_orig \"\\$obj\"
+        for obj in src/*.o src/*/*.o
+do
+            [ -f \"\$obj\" ] || continue
+            if nm \"\$obj\" 2>/dev/null | grep -q ' T main$'
+then
+                bn=\$(basename \"\$obj\" .o)
+                objcopy --redefine-sym main=\${bn}_main_orig \"\$obj\"
             fi
         done
 
         # Repack the raw archive after renaming mains in-place
         find src/ library/ lib/ -name '*.o' ! -path '*/tests/*' ! -path '*/testsuite/*' 2>/dev/null | sort > obj_list.txt
-        ar rcs libprocps_raw.a \\$(cat obj_list.txt) 2>/dev/null || true
+        ar rcs libprocps_raw.a \$(cat obj_list.txt) 2>/dev/null || true
 
         # Step 3: Combine all objects into one relocatable .o
         ld -r --whole-archive libprocps_raw.a -o procps_combined.o \
@@ -112,10 +114,11 @@ vcpkg_execute_required_process(
         # The tool object basenames may vary by procps-ng version; handle common names.
         # ps may be in pscommand.o or ps.o; top may be in top.o or top_main.o, etc.
         # We enumerate all _main_orig symbols actually present and map them.
-        nm procps_combined.o 2>/dev/null | grep '_main_orig' | sed 's/.* //' | while read sym; do
+        nm procps_combined.o 2>/dev/null | grep '_main_orig' | sed 's/.* //' | while read sym
+do
             # sym is like procps_free_main_orig — extract the tool name
-            tool=\\$(echo \"\\$sym\" | sed 's/^procps_//; s/_main_orig$//')
-            echo \"\\$sym \\${tool}_main\"
+            tool=\$(echo \"\$sym\" | sed 's/^procps_//; s/_main_orig$//')
+            echo \"\$sym \${tool}_main\"
         done >> redefine.map
 
         objcopy --redefine-syms=redefine.map procps_combined.o

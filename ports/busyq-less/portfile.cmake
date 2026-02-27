@@ -1,8 +1,7 @@
 vcpkg_download_distfile(ARCHIVE
-    URLS "https://github.com/gwsw/less/releases/download/v661/less-661.tar.gz"
-         "https://www.greenwoodsoftware.com/less/less-661.tar.gz"
+    URLS "https://www.greenwoodsoftware.com/less/less-661.tar.gz"
     FILENAME "less-661.tar.gz"
-    SHA512 0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+    SHA512 49d81ff9e79d43ce0271490e3bffd590b4aed5fcb387bc8eb3128de99e5b5a5ede2e2818b546f6e3a140fa6261f1de3dfba1231f7ff7ef18502bb7030eaea1b5
 )
 
 vcpkg_extract_source_archive(SOURCE_PATH ARCHIVE "${ARCHIVE}")

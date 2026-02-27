@@ -2,7 +2,7 @@ vcpkg_download_distfile(ARCHIVE
     URLS "https://github.com/tukaani-project/xz/releases/download/v5.6.3/xz-5.6.3.tar.xz"
          "https://tukaani.org/xz/xz-5.6.3.tar.xz"
     FILENAME "xz-5.6.3.tar.xz"
-    SHA512 0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+    SHA512 1449f3b55819fb7f46855e550e367e96d658f523531fc2a65c2e1f1b847de86bf2fa50f3909f42cbff94a56b0cf8b0b5cd278097622da980119548f61e245f0a
 )
 
 vcpkg_extract_source_archive(SOURCE_PATH ARCHIVE "${ARCHIVE}")

@@ -2,7 +2,7 @@ vcpkg_download_distfile(ARCHIVE
     URLS "https://sourceforge.net/projects/psmisc/files/psmisc/psmisc-23.7.tar.xz"
          "https://gitlab.com/psmisc/psmisc/-/archive/v23.7/psmisc-v23.7.tar.gz"
     FILENAME "psmisc-23.7.tar.xz"
-    SHA512 0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+    SHA512 8180d24355b3b0f3102044916d078b1aa9a1af3d84f1e14db79e33e505390167012adbb1a8a5f47a692f3a14aba1eb5f1f8f37f328392e8635b89966af9b2128
 )
 
 vcpkg_extract_source_archive(SOURCE_PATH ARCHIVE "${ARCHIVE}")
@@ -20,6 +20,18 @@ set(PSMISC_CFLAGS "${VCPKG_DETECTED_CMAKE_C_FLAGS} ${VCPKG_DETECTED_CMAKE_C_FLAG
 # --without-selinux: no SELinux support needed in distroless containers
 # FORCE_UNSAFE_CONFIGURE=1: allow running configure as root inside containers
 set(ENV{FORCE_UNSAFE_CONFIGURE} "1")
+
+# vcpkg builds ncurses as libncursesw.a (wide-char), but psmisc's configure
+# checks for -ltinfo / -lncurses / -ltermcap via AC_CHECK_LIB. Create
+# compatibility symlinks so the linker check succeeds.
+foreach(_libdir "${CURRENT_INSTALLED_DIR}/lib" "${CURRENT_INSTALLED_DIR}/debug/lib")
+    if(EXISTS "${_libdir}/libncursesw.a" AND NOT EXISTS "${_libdir}/libncurses.a")
+        file(CREATE_LINK "${_libdir}/libncursesw.a" "${_libdir}/libncurses.a" SYMBOLIC)
+    endif()
+    if(EXISTS "${_libdir}/libncursesw.a" AND NOT EXISTS "${_libdir}/libtinfo.a")
+        file(CREATE_LINK "${_libdir}/libncursesw.a" "${_libdir}/libtinfo.a" SYMBOLIC)
+    endif()
+endforeach()
 
 vcpkg_configure_make(
     SOURCE_PATH "${SOURCE_PATH}"
@@ -71,17 +83,19 @@ vcpkg_execute_required_process(
 
         # Step 2: For each object file that defines a 'main' symbol,
         # rename main → <basename>_main_orig so we can identify them after prefixing.
-        for obj in src/*.o; do
-            [ -f \"\\$obj\" ] || continue
-            if nm \"\\$obj\" 2>/dev/null | grep -q ' T main$'; then
-                bn=\\$(basename \"\\$obj\" .o)
-                objcopy --redefine-sym main=\\${bn}_main_orig \"\\$obj\"
+        for obj in src/*.o
+do
+            [ -f \"\$obj\" ] || continue
+            if nm \"\$obj\" 2>/dev/null | grep -q ' T main$'
+then
+                bn=\$(basename \"\$obj\" .o)
+                objcopy --redefine-sym main=\${bn}_main_orig \"\$obj\"
             fi
         done
 
         # Repack the raw archive after renaming mains in-place
         find src/ -name '*.o' ! -path '*/tests/*' ! -path '*/testsuite/*' 2>/dev/null | sort > obj_list.txt
-        ar rcs libpsmisc_raw.a \\$(cat obj_list.txt) 2>/dev/null || true
+        ar rcs libpsmisc_raw.a \$(cat obj_list.txt) 2>/dev/null || true
 
         # Step 3: Combine all objects into one relocatable .o
         ld -r --whole-archive libpsmisc_raw.a -o psmisc_combined.o \
@@ -99,10 +113,11 @@ vcpkg_execute_required_process(
 
         # Step 7: Rename psmisc_<tool>_main_orig → <tool>_main for each tool
         # Enumerate all _main_orig symbols actually present and map them.
-        nm psmisc_combined.o 2>/dev/null | grep '_main_orig' | sed 's/.* //' | while read sym; do
+        nm psmisc_combined.o 2>/dev/null | grep '_main_orig' | sed 's/.* //' | while read sym
+do
             # sym is like psmisc_killall_main_orig — extract the tool name
-            tool=\\$(echo \"\\$sym\" | sed 's/^psmisc_//; s/_main_orig$//')
-            echo \"\\$sym \\${tool}_main\"
+            tool=\$(echo \"\$sym\" | sed 's/^psmisc_//; s/_main_orig$//')
+            echo \"\$sym \${tool}_main\"
         done >> redefine.map
 
         objcopy --redefine-syms=redefine.map psmisc_combined.o

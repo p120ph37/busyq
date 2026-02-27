@@ -1,7 +1,7 @@
 vcpkg_download_distfile(ARCHIVE
     URLS "https://waterlan.home.xs4all.nl/dos2unix/dos2unix-7.5.2.tar.gz"
     FILENAME "dos2unix-7.5.2.tar.gz"
-    SHA512 0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+    SHA512 d76d799435dd248850f72cc50af2144a51e99f04ea83a1447c4edd828625c83f0afba367da51aa83defced4cbf34f3b75387a0821010f7b212225571036efbb2
 )
 
 vcpkg_extract_source_archive(SOURCE_PATH ARCHIVE "${ARCHIVE}")
@@ -26,14 +26,14 @@ vcpkg_execute_required_process(
 
         # Compile key source files
         # dos2unix.c contains the main() that dispatches on argv[0]
-        ${D2U_CC} ${D2U_CFLAGS} -I'${SOURCE_PATH}' -DVER_REVISION='\"7.5.2\"' \
-            -DVER_AUTHOR='\"\"' -DDEBUG=0 -DD2U_UNIFILE=0 \
+        ${D2U_CC} ${D2U_CFLAGS} -I'${SOURCE_PATH}' -DVER_REVISION='\"7.5.2\"' -DVER_DATE='\"2024-01-22\"' \
+            -DVER_AUTHOR='\"\"' -DDEBUG=0 -UD2U_UNIFILE \
             -c '${SOURCE_PATH}/dos2unix.c' -o dos2unix.o
-        ${D2U_CC} ${D2U_CFLAGS} -I'${SOURCE_PATH}' -DVER_REVISION='\"7.5.2\"' \
-            -DDEBUG=0 -DD2U_UNIFILE=0 \
+        ${D2U_CC} ${D2U_CFLAGS} -I'${SOURCE_PATH}' -DVER_REVISION='\"7.5.2\"' -DVER_DATE='\"2024-01-22\"' \
+            -DDEBUG=0 -UD2U_UNIFILE \
             -c '${SOURCE_PATH}/querycp.c' -o querycp.o
-        ${D2U_CC} ${D2U_CFLAGS} -I'${SOURCE_PATH}' -DVER_REVISION='\"7.5.2\"' \
-            -DDEBUG=0 -DD2U_UNIFILE=0 \
+        ${D2U_CC} ${D2U_CFLAGS} -I'${SOURCE_PATH}' -DVER_REVISION='\"7.5.2\"' -DVER_DATE='\"2024-01-22\"' \
+            -DDEBUG=0 -UD2U_UNIFILE \
             -c '${SOURCE_PATH}/common.c' -o common.o
 
         # Pack into raw archive

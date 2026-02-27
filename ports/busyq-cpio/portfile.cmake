@@ -3,7 +3,7 @@ vcpkg_download_distfile(ARCHIVE
          "https://mirrors.kernel.org/gnu/cpio/cpio-2.15.tar.gz"
          "https://ftp.gnu.org/gnu/cpio/cpio-2.15.tar.gz"
     FILENAME "cpio-2.15.tar.gz"
-    SHA512 0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+    SHA512 7662e5185b7a056a0b0f68d14a3a0fbe77b0dfb993003f76717a5e0bb03dbdc38971f2b0df7a79db608859f336ccd84dd0b1a03c120fed52582bed6d47c86ecb
 )
 
 vcpkg_extract_source_archive(SOURCE_PATH ARCHIVE "${ARCHIVE}")
@@ -21,7 +21,6 @@ vcpkg_configure_make(
     SOURCE_PATH "${SOURCE_PATH}"
     OPTIONS
         --disable-nls
-        --without-rmt
 )
 
 vcpkg_build_make()

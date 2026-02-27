@@ -5,13 +5,13 @@
 vcpkg_download_distfile(ZIP_ARCHIVE
     URLS "https://downloads.sourceforge.net/infozip/zip30.tar.gz"
     FILENAME "zip30.tar.gz"
-    SHA512 0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+    SHA512 c1c3d62bf1426476c0f9919b568013d6d7b03514912035f09ee283226d94c978791ad2af5310021e96c4c2bf320bfc9d0b8f4045c48e4667e034d98197e1a9b3
 )
 
 vcpkg_download_distfile(UNZIP_ARCHIVE
     URLS "https://downloads.sourceforge.net/infozip/unzip60.tar.gz"
     FILENAME "unzip60.tar.gz"
-    SHA512 0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+    SHA512 0694e403ebc57b37218e00ec1a406cae5cc9c5b52b6798e0d4590840b6cdbf9ddc0d9471f67af783e960f8fa2e620394d51384257dca23d06bcd90224a80ce5d
 )
 
 vcpkg_extract_source_archive(ZIP_SOURCE_PATH ARCHIVE "${ZIP_ARCHIVE}")
@@ -32,13 +32,17 @@ file(MAKE_DIRECTORY "${CURRENT_PACKAGES_DIR}/lib")
 set(ZIP_BUILD_DIR "${CURRENT_BUILDTREES_DIR}/${TARGET_TRIPLET}-rel-zip")
 file(MAKE_DIRECTORY "${ZIP_BUILD_DIR}")
 
-# Build using the unix Makefile
+# Build using the unix Makefile directly (skip `generic` target which runs
+# unix/configure — that script misdetects features on musl/clang and sets
+# wrong flags like -DZMEM that conflict with system headers).
 vcpkg_execute_required_process(
     COMMAND sh -c "
         set -e
-        make -f unix/Makefile generic \
+        make -f unix/Makefile zips \
             CC='${ZIP_CC}' \
-            CFLAGS='${ZIP_CFLAGS} -DUNIX -D_FILE_OFFSET_BITS=64' \
+            CFLAGS='${ZIP_CFLAGS} -I. -DUNIX -DLARGE_FILE_SUPPORT -D_FILE_OFFSET_BITS=64 -DHAVE_DIRENT_H -DHAVE_TERMIOS_H -DUIDGID_NOT_16BIT -DUNICODE_SUPPORT' \
+            LFLAGS1='' LFLAGS2='' OBJA='' \
+            OCRCU8='crc32_.o' OCRCTB='' \
             -j1
     "
     WORKING_DIRECTORY "${ZIP_SOURCE_PATH}"
@@ -89,13 +93,14 @@ vcpkg_execute_required_process(
 set(UNZIP_BUILD_DIR "${CURRENT_BUILDTREES_DIR}/${TARGET_TRIPLET}-rel-unzip")
 file(MAKE_DIRECTORY "${UNZIP_BUILD_DIR}")
 
-# Build using the unix Makefile
+# Build unzip directly (bypass broken unix/configure like zip above)
 vcpkg_execute_required_process(
     COMMAND sh -c "
         set -e
-        make -f unix/Makefile generic \
+        make -f unix/Makefile unzips \
             CC='${ZIP_CC}' \
-            CF='${ZIP_CFLAGS} -DUNIX -D_FILE_OFFSET_BITS=64 -I.' \
+            CF='${ZIP_CFLAGS} -I. -DUNIX -DLARGE_FILE_SUPPORT -D_FILE_OFFSET_BITS=64 -DHAVE_DIRENT_H -DHAVE_TERMIOS_H -DUIDGID_NOT_16BIT -DUNICODE_SUPPORT -DUTF8_MAYBE_NATIVE -DNATIVE' \
+            LF1='' LF2='' AF='' \
             -j1
     "
     WORKING_DIRECTORY "${UNZIP_SOURCE_PATH}"

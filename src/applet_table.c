@@ -52,7 +52,6 @@ extern int dc_main(int argc, char **argv);
 extern int less_main(int argc, char **argv);
 extern int strings_main(int argc, char **argv);
 extern int time_main(int argc, char **argv);
-extern int beep_main(int argc, char **argv);
 extern int dos2unix_main(int argc, char **argv);
 extern int uuencode_main(int argc, char **argv);
 extern int uudecode_main(int argc, char **argv);
@@ -249,7 +248,6 @@ static const struct busyq_applet applets[] = {
     { "less",       less_main,      0 },
     { "strings",    strings_main,   0 },
     { "time",       time_main,      0 },
-    { "beep",       beep_main,      0 },
     { "dos2unix",   dos2unix_main,  0 },
     { "unix2dos",   dos2unix_main,  0 },
     { "uuencode",   uuencode_main,  0 },
