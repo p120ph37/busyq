@@ -1,0 +1,17 @@
+{
+  "name": "busyq-procps",
+  "version-string": "4.0.4",
+  "description": "procps-ng built as a static library for busyq (ps, free, top, pgrep, pkill, pidof, pmap, pwdx, watch, sysctl, vmstat)",
+  "license": "GPL-2.0-or-later",
+  "dependencies": [
+    "ncurses",
+    {
+      "name": "vcpkg-cmake-get-vars",
+      "host": true
+    },
+    {
+      "name": "vcpkg-make",
+      "host": true
+    }
+  ]
+}

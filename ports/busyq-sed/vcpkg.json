@@ -1,0 +1,16 @@
+{
+  "name": "busyq-sed",
+  "version-string": "4.9",
+  "description": "GNU sed built as a static library for busyq",
+  "license": "GPL-3.0-or-later",
+  "dependencies": [
+    {
+      "name": "vcpkg-cmake-get-vars",
+      "host": true
+    },
+    {
+      "name": "vcpkg-make",
+      "host": true
+    }
+  ]
+}

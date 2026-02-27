@@ -1,0 +1,16 @@
+{
+  "name": "busyq-time",
+  "version-string": "1.9",
+  "description": "GNU time built as a static library for busyq",
+  "license": "GPL-3.0-or-later",
+  "dependencies": [
+    {
+      "name": "vcpkg-cmake-get-vars",
+      "host": true
+    },
+    {
+      "name": "vcpkg-make",
+      "host": true
+    }
+  ]
+}

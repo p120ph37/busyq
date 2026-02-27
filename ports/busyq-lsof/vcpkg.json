@@ -1,0 +1,16 @@
+{
+  "name": "busyq-lsof",
+  "version-string": "4.99.3",
+  "description": "lsof built as a static library for busyq (lsof)",
+  "license": "Zlib",
+  "dependencies": [
+    {
+      "name": "vcpkg-cmake-get-vars",
+      "host": true
+    },
+    {
+      "name": "vcpkg-make",
+      "host": true
+    }
+  ]
+}

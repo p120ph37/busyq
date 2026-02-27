@@ -1,0 +1,13 @@
+{
+  "name": "busyq-reset",
+  "version-string": "6.5",
+  "description": "reset/tset from ncurses built as a static library for busyq",
+  "license": "MIT",
+  "dependencies": [
+    {
+      "name": "vcpkg-cmake-get-vars",
+      "host": true
+    },
+    "ncurses"
+  ]
+}

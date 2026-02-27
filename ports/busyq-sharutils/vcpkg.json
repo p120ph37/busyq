@@ -1,0 +1,16 @@
+{
+  "name": "busyq-sharutils",
+  "version-string": "4.15.2",
+  "description": "GNU sharutils (uuencode/uudecode) built as a static library for busyq",
+  "license": "GPL-3.0-or-later",
+  "dependencies": [
+    {
+      "name": "vcpkg-cmake-get-vars",
+      "host": true
+    },
+    {
+      "name": "vcpkg-make",
+      "host": true
+    }
+  ]
+}

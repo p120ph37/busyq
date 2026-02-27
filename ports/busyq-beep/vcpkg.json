@@ -1,0 +1,12 @@
+{
+  "name": "busyq-beep",
+  "version-string": "1.4.12",
+  "description": "beep built as a static library for busyq",
+  "license": "GPL-2.0-or-later",
+  "dependencies": [
+    {
+      "name": "vcpkg-cmake-get-vars",
+      "host": true
+    }
+  ]
+}

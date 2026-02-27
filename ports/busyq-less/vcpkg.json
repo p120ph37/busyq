@@ -1,0 +1,17 @@
+{
+  "name": "busyq-less",
+  "version-string": "661",
+  "description": "less built as a static library for busyq",
+  "license": "GPL-3.0-or-later",
+  "dependencies": [
+    {
+      "name": "vcpkg-cmake-get-vars",
+      "host": true
+    },
+    {
+      "name": "vcpkg-make",
+      "host": true
+    },
+    "ncurses"
+  ]
+}

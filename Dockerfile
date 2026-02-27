@@ -1,6 +1,6 @@
 # Dockerfile - Multi-stage build for busyq
 #
-# Builds two variants of the busyq binary (bash+curl+jq+coreutils):
+# Builds two variants of the busyq binary (bash+curl+jq+coreutils+tools):
 #   1. busyq      - No SSL (smaller)
 #   2. busyq-ssl  - With mbedtls + embedded Mozilla CA bundle
 #
@@ -69,6 +69,7 @@ RUN strip --strip-all build/ssl/busyq \
 FROM alpine:latest AS test
 COPY --from=build /src/out/busyq /busyq
 COPY --from=build /src/out/busyq-ssl /busyq-ssl
+# Core (Phase 0-1)
 RUN /busyq -c 'echo "bash: ok"' \
     && /busyq -c 'ls /' > /dev/null \
     && /busyq -c 'cat /dev/null' \
@@ -76,7 +77,34 @@ RUN /busyq -c 'echo "bash: ok"' \
     && /busyq -c 'jq -n "{test: true}"' \
     && /busyq -c 'curl --version' > /dev/null \
     && /busyq-ssl -c 'curl --version' | grep -qi tls \
-    && echo "All smoke tests passed"
+    && echo "Core tests passed"
+# Phase 2: Text processing
+RUN /busyq -c 'echo hello | awk "{print \$1}"' \
+    && /busyq -c 'echo hello | sed s/hello/world/' \
+    && /busyq -c 'echo hello | grep hello' \
+    && /busyq -c 'echo -e "a\nb" | diff - <(echo -e "a\nc") || true' \
+    && /busyq -c 'find / -maxdepth 1 -name "busyq" -print' > /dev/null \
+    && /busyq -c 'echo test | xargs echo' \
+    && echo "Phase 2 tests passed"
+# Phase 3: Archival
+RUN /busyq -c 'echo test | gzip | gunzip' \
+    && /busyq -c 'echo test | bzip2 | bunzip2' \
+    && /busyq -c 'echo test | xz | unxz' \
+    && /busyq -c 'tar --version' > /dev/null \
+    && echo "Phase 3 tests passed"
+# Phase 4: Small standalone tools
+RUN /busyq -c 'echo "1+1" | bc' \
+    && /busyq -c 'which ls' > /dev/null \
+    && /busyq -c 'strings /busyq | head -1' > /dev/null \
+    && echo "Phase 4 tests passed"
+# Phase 5: Networking
+RUN /busyq -c 'hostname' > /dev/null \
+    && echo "Phase 5 tests passed"
+# Phase 6: Process utilities
+RUN /busyq -c 'ps aux' > /dev/null \
+    && /busyq -c 'free' > /dev/null \
+    && echo "Phase 6 tests passed"
+RUN echo "All smoke tests passed"
 
 # ============================================================
 # Stage 3: Extract binaries
