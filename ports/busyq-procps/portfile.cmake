@@ -1,28 +1,30 @@
-vcpkg_download_distfile(ARCHIVE
-    URLS "https://sourceforge.net/projects/procps-ng/files/Production/procps-ng-4.0.4.tar.xz"
-         "https://gitlab.com/procps-ng/procps/-/archive/v4.0.4/procps-v4.0.4.tar.gz"
-    FILENAME "procps-ng-4.0.4.tar.xz"
-    SHA512 94375544e2422fefc23d7634063c49ef1be62394c46039444f85e6d2e87e45cfadc33accba5ca43c96897b4295bfb0f88d55a30204598ddb26ef66f0420cefb4
+# busyq-procps portfile - uses Alpine-synced source and patches
+#
+# Alpine patches applied:
+#   disable-test_pids-check.patch - Skip PID tests (only affects `make check`)
+#
+# Version: 4.0.5 (synced from Alpine 3.23-stable)
+
+include("${CMAKE_CURRENT_LIST_DIR}/../../scripts/cmake/busyq_alpine_helpers.cmake")
+
+busyq_alpine_source(
+    PORT_DIR "${CMAKE_CURRENT_LIST_DIR}"
+    OUT_SOURCE_PATH SOURCE_PATH
 )
 
-vcpkg_extract_source_archive(SOURCE_PATH ARCHIVE "${ARCHIVE}")
-
-# Detect toolchain flags (CC, CFLAGS with LTO/optimization) before autotools
-# claims the build directory.
+# Detect toolchain flags before autotools claims the build directory
 vcpkg_cmake_get_vars(cmake_vars_file)
 include("${cmake_vars_file}")
 
-set(PROCPS_CC "${VCPKG_DETECTED_CMAKE_C_COMPILER}")
-set(PROCPS_CFLAGS "${VCPKG_DETECTED_CMAKE_C_FLAGS} ${VCPKG_DETECTED_CMAKE_C_FLAGS_RELEASE}")
-
-# Build procps-ng with autotools.
-# --disable-nls: no internationalization (smaller binary)
-# --disable-shared / --enable-static: static library only
-# --without-systemd: no systemd journal integration
-# --disable-kill: coreutils already provides kill
-# --enable-watch: build the watch utility
-# FORCE_UNSAFE_CONFIGURE=1: allow running configure as root inside containers
 set(ENV{FORCE_UNSAFE_CONFIGURE} "1")
+
+# Alpine's disable-test_pids-check.patch touches Makefile.am for tests only.
+# We never run `make check`, so autoreconf is not needed. Touch Makefile.in
+# to prevent automake from triggering a rebuild during `make`.
+file(GLOB_RECURSE _makefiles "${SOURCE_PATH}/Makefile.in")
+foreach(_mf ${_makefiles})
+    file(TOUCH "${_mf}")
+endforeach()
 
 vcpkg_configure_make(
     SOURCE_PATH "${SOURCE_PATH}"
@@ -47,7 +49,6 @@ file(MAKE_DIRECTORY "${CURRENT_PACKAGES_DIR}/lib")
 #
 # 1. Collect all .o files from library and tool sources
 # 2. For each tool .o that defines main(), rename main → <basename>_main_orig
-#    (so we can track which main belongs to which tool after prefixing)
 # 3. Combine into one relocatable object with ld -r
 # 4. Record undefined symbols (external deps: libc, ncurses, etc.)
 # 5. Prefix ALL symbols with procps_
@@ -55,10 +56,10 @@ file(MAKE_DIRECTORY "${CURRENT_PACKAGES_DIR}/lib")
 # 7. Rename procps_<tool>_main_orig → <tool>_main for each tool
 # 8. Package into libprocps.a
 
-# Step 1: Collect all object files from the build
 file(GLOB_RECURSE PROCPS_OBJS
     "${PROCPS_BUILD_REL}/src/*.o"
     "${PROCPS_BUILD_REL}/library/*.o"
+    "${PROCPS_BUILD_REL}/local/*.o"
     "${PROCPS_BUILD_REL}/lib/*.o"
 )
 list(FILTER PROCPS_OBJS EXCLUDE REGEX "/(tests|testsuite|man|doc)/")
@@ -67,21 +68,16 @@ if(NOT PROCPS_OBJS)
     message(FATAL_ERROR "No procps-ng object files found in ${PROCPS_BUILD_REL}")
 endif()
 
-# Step 1a: Pack into temporary archive (needed for ld -r --whole-archive)
 vcpkg_execute_required_process(
     COMMAND ar rcs "${PROCPS_BUILD_REL}/libprocps_raw.a" ${PROCPS_OBJS}
     WORKING_DIRECTORY "${PROCPS_BUILD_REL}"
     LOGNAME "ar-raw-${TARGET_TRIPLET}"
 )
 
-# Steps 2-8: Rename per-tool mains, combine, prefix, unprefix, rename entries
 vcpkg_execute_required_process(
     COMMAND sh -c "
         set -e
 
-        # Step 2: For each object file that defines a 'main' symbol,
-        # rename main → <basename>_main_orig so we can identify them after prefixing.
-        # Only process tool source .o files, not library .o files.
         for obj in src/*.o src/*/*.o
 do
             [ -f \"\$obj\" ] || continue
@@ -92,48 +88,47 @@ then
             fi
         done
 
-        # Repack the raw archive after renaming mains in-place
-        find src/ library/ lib/ -name '*.o' ! -path '*/tests/*' ! -path '*/testsuite/*' 2>/dev/null | sort > obj_list.txt
+        find src/ library/ local/ lib/ -name '*.o' ! -path '*/tests/*' ! -path '*/testsuite/*' 2>/dev/null | sort > obj_list.txt
         ar rcs libprocps_raw.a \$(cat obj_list.txt) 2>/dev/null || true
 
-        # Step 3: Combine all objects into one relocatable .o
         ld -r --whole-archive libprocps_raw.a -o procps_combined.o \
             -z muldefs 2>/dev/null \
         || ld -r --whole-archive libprocps_raw.a -o procps_combined.o
 
-        # Step 4: Record undefined symbols (external deps: libc, ncurses, etc.)
         nm -u procps_combined.o | sed 's/.* //' | sort -u > undef_syms.txt
 
-        # Step 5: Prefix all symbols with procps_
         objcopy --prefix-symbols=procps_ procps_combined.o
 
-        # Step 6: Generate redefine map to unprefix external deps
         sed 's/.*/procps_& &/' undef_syms.txt > redefine.map
 
-        # Step 7: Rename procps_<tool>_main_orig → <tool>_main for each tool
-        # The tool object basenames may vary by procps-ng version; handle common names.
-        # ps may be in pscommand.o or ps.o; top may be in top.o or top_main.o, etc.
-        # We enumerate all _main_orig symbols actually present and map them.
-        nm procps_combined.o 2>/dev/null | grep '_main_orig' | sed 's/.* //' | while read sym
-do
-            # sym is like procps_free_main_orig — extract the tool name
-            tool=\$(echo \"\$sym\" | sed 's/^procps_//; s/_main_orig$//')
-            echo \"\$sym \${tool}_main\"
-        done >> redefine.map
+        # Explicit tool name mapping (basename → applet name)
+        # Some procps binaries have hyphenated names (top-top, watch-watch)
+        # or differ from the applet name (display → ps, pgrep → also pkill)
+        echo 'procps_display_main_orig ps_main' >> redefine.map
+        echo 'procps_free_main_orig free_main' >> redefine.map
+        echo 'procps_top-top_main_orig top_main' >> redefine.map
+        echo 'procps_pgrep_main_orig pgrep_main' >> redefine.map
+        echo 'procps_pidof_main_orig pidof_main' >> redefine.map
+        echo 'procps_pmap_main_orig pmap_main' >> redefine.map
+        echo 'procps_pwdx_main_orig pwdx_main' >> redefine.map
+        echo 'procps_watch-watch_main_orig watch_main' >> redefine.map
+        echo 'procps_sysctl_main_orig sysctl_main' >> redefine.map
+        echo 'procps_vmstat_main_orig vmstat_main' >> redefine.map
+        echo 'procps_uptime_main_orig uptime_main' >> redefine.map
+        echo 'procps_w_main_orig w_main' >> redefine.map
+        echo 'procps_tload_main_orig tload_main' >> redefine.map
+        echo 'procps_slabtop-slabtop_main_orig slabtop_main' >> redefine.map
+        echo 'procps_hugetop-hugetop_main_orig hugetop_main' >> redefine.map
 
         objcopy --redefine-syms=redefine.map procps_combined.o
 
-        # Step 8: Package into final archive
         ar rcs '${CURRENT_PACKAGES_DIR}/lib/libprocps.a' procps_combined.o
     "
     WORKING_DIRECTORY "${PROCPS_BUILD_REL}"
     LOGNAME "symbol-isolate-${TARGET_TRIPLET}"
 )
 
-# Suppress vcpkg post-build warnings — we only produce release libraries
-# and procps-ng has no public headers needed by busyq (it's tools, not a library API)
 set(VCPKG_POLICY_MISMATCHED_NUMBER_OF_BINARIES enabled)
 set(VCPKG_POLICY_EMPTY_INCLUDE_FOLDER enabled)
 
-# Install copyright
 vcpkg_install_copyright(FILE_LIST "${SOURCE_PATH}/COPYING")

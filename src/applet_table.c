@@ -48,7 +48,8 @@ extern int unzip_main(int argc, char **argv);
 
 /* Phase 4: Small standalone tools */
 extern int bc_main(int argc, char **argv);
-extern int dc_main(int argc, char **argv);
+/* TODO: dc not built by bc port yet - needs configure fix */
+/* extern int dc_main(int argc, char **argv); */
 extern int less_main(int argc, char **argv);
 extern int strings_main(int argc, char **argv);
 extern int time_main(int argc, char **argv);
@@ -70,7 +71,6 @@ extern int ps_main(int argc, char **argv);
 extern int free_main(int argc, char **argv);
 extern int top_main(int argc, char **argv);
 extern int pgrep_main(int argc, char **argv);
-extern int pkill_main(int argc, char **argv);
 extern int pidof_main(int argc, char **argv);
 extern int pmap_main(int argc, char **argv);
 extern int pwdx_main(int argc, char **argv);
@@ -244,7 +244,7 @@ static const struct busyq_applet applets[] = {
 
     /* --- Phase 4: Small standalone tools --- */
     { "bc",         bc_main,        0 },
-    { "dc",         dc_main,        0 },
+    /* { "dc",         dc_main,        0 }, */
     { "less",       less_main,      0 },
     { "strings",    strings_main,   0 },
     { "time",       time_main,      0 },
@@ -270,7 +270,7 @@ static const struct busyq_applet applets[] = {
     { "free",       free_main,      0 },
     { "top",        top_main,       0 },
     { "pgrep",      pgrep_main,     0 },
-    { "pkill",      pkill_main,     0 },
+    { "pkill",      pgrep_main,     0 },
     { "pidof",      pidof_main,     0 },
     { "pmap",       pmap_main,      0 },
     { "pwdx",       pwdx_main,      0 },
