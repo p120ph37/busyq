@@ -27,21 +27,18 @@
 #include "applets.h"
 
 /* ------------------------------------------------------------------ */
-/* External entry points                                               */
+/* External entry points — auto-generated from applets.h               */
 /*                                                                     */
-/* Only enabled functions are actually referenced in the table below.   */
-/* Unreferenced externs do not create linker dependencies; LTO/gc-      */
-/* sections will strip the corresponding code.                         */
+/* The X-macro pass forward-declares each enabled entry function.      */
+/* Only referenced functions create linker dependencies; LTO/gc-       */
+/* sections will strip the rest.  busyq_help_main is defined below.    */
 /* ------------------------------------------------------------------ */
 
-extern int curl_main(int argc, char **argv);
-extern int jq_main(int argc, char **argv);
-extern int coreutils_main(int argc, char **argv);
-#if BUSYQ_SSL
-extern int ssl_client_main(int argc, char **argv);
-#endif
+int busyq_help_main(int argc, char **argv);
 
-static int busyq_help_main(int argc, char **argv);
+#define APPLET(mod, cmd, func) extern int func(int, char **);
+#include "applets.h"
+#undef APPLET
 
 /* ------------------------------------------------------------------ */
 /* Applet table — populated via X-macro                                */
@@ -77,7 +74,7 @@ const struct busyq_applet *busyq_find_applet(const char *name)
 /* Help — lists all compiled-in commands                               */
 /* ------------------------------------------------------------------ */
 
-static int busyq_help_main(int argc, char **argv)
+int busyq_help_main(int argc, char **argv)
 {
     int i, col;
 

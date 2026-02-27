@@ -67,7 +67,8 @@ and build orchestration. The top-level CMakeLists.txt links everything together.
 - All tools registered in src/applets.h (X-macro) and dispatched via src/applets.c
 - Applet filtering at compile time: -DBUSYQ_CUSTOM_APPLETS + -DAPPLET_<name>=1
   allows LTO to strip unreferenced entry functions (no code generation needed)
-- Multi-call packages (coreutils) use one dispatch entry point that routes on argv[0]
+- Coreutils uses per-command entry points (single_binary_main_*) instead of a
+  shared dispatcher, enabling LTO to prune unused commands in custom builds
 
 ### All libraries via vcpkg (no system libraries except musl)
 Every library dependency must be built via vcpkg — never use system-installed
@@ -88,20 +89,36 @@ linux-headers for kernel API definitions.
 
 ### Symbol isolation (critical for multi-package linking)
 Multiple GNU packages embed gnulib, causing symbol collisions (xmalloc,
-hash_insert, yyparse, etc.) when statically linked into one binary. Each
-package's portfile resolves this:
+hash_insert, quotearg, etc.) when statically linked into one binary.
 
-1. `ld -r --whole-archive libfoo_raw.a -o foo_combined.o` — combine all
-   objects into one relocatable file (resolves internal dupes)
-2. `nm -u foo_combined.o` — record undefined symbols (libc, pthreads, etc.)
-3. `objcopy --prefix-symbols=foo_` — namespace all symbols
-4. `objcopy --redefine-syms=unprefix.map` — unprefix the external deps
-   (so libc calls work) and rename `foo_main` → `toolname_main`
-5. Package into `libfoo.a`
+**Compile-time prefixing** (preferred — preserves LLVM bitcode for LTO):
+1. Extract defined symbols from already-installed libraries (e.g. bash)
+2. Subtract libc/system symbols (must not be renamed)
+3. Generate `cu_prefix.h` with `#define sym cu_sym` for each collision
+4. Build with `-include cu_prefix.h` (via CPPFLAGS) — renames at CPP level
+5. `ld -r --whole-archive -z muldefs` to combine objects (lld preserves bitcode)
+6. Package into `libfoo.a` — no objcopy, full bitcode preserved
 
-This pattern is implemented in `ports/busyq-coreutils/portfile.cmake` and
-should be reused for all future packages that embed gnulib (gawk, sed, grep,
+This is implemented in `ports/busyq-coreutils/portfile.cmake` and should
+be reused for all future packages that embed gnulib (gawk, sed, grep,
 findutils, diffutils, etc.).
+
+**Why not objcopy?** The old approach (`objcopy --prefix-symbols=cu_`)
+renames ELF symbols but not LLVM IR references, destroying bitcode and
+preventing cross-project LTO optimization. Compile-time prefixing operates
+at the source level, so LLVM bitcode is preserved end-to-end.
+
+### Per-command coreutils entry points (LTO pruning)
+Coreutils is built with `--enable-single-binary=symlinks`, which renames
+each tool's `main()` to `single_binary_main_TOOLNAME()`. The applet table
+in `src/applets.h` references these individual entry points directly,
+bypassing the coreutils argv[0]-based dispatcher. This gives LTO a static
+call graph: only commands present in the applet table are reachable, and
+unused commands are pruned during link-time optimization.
+
+Special entry point names (from coreutils' `gen-single-binary.sh`):
+- `[` → `single_binary_main__` (bracket sanitized to underscore)
+- `install` → `single_binary_main_ginstall` (avoids make target conflict)
 
 ## Iterative development with Docker
 
