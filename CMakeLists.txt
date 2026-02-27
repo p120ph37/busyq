@@ -16,7 +16,7 @@ project(busyq C)
 #
 # Custom build workflow:
 #   1. Build libbusyq.a once (expensive: vcpkg ports + LTO compilation)
-#   2. Run:  scripts/busyq-scan myscript.sh --applets
+#   2. Run:  busyq-scan myscript.sh --applets
 #   3. Run:  scripts/gen-applet-table.sh --applets 'curl;ls;cat' -o at.c
 #   4. Link: cc -flto -static -Os at.c -Isrc/ libbusyq.a -lm -ldl -lpthread -o busyq
 #      (Fast: no vcpkg rebuild, just compile one .c + final link w/ LTO)
@@ -236,13 +236,65 @@ add_dependencies(busyq busyq-lib)
 target_link_options(busyq PRIVATE -static -Wl,--gc-sections)
 
 # =====================================================================
+# busyq-scan — AST-walking script scanner
+#
+# A separate binary that uses bash's parser (in -n mode) to walk
+# the AST and extract command references.  Classifies each command
+# as a bash builtin, busyq applet, script-defined function, or
+# external command.  Supports multiple output modes (report, json,
+# applets list, cmake flag, etc.).
+#
+# Links: scan_main.o + libbusyq_scan.a + bash libs + ncurses
+# Uses -Wl,--wrap=reader_loop to interpose our AST walker.
+# Uses -Wl,--wrap=exit to support multi-file processing.
+# =====================================================================
+find_library(LIB_BUSYQ_SCAN busyq_scan PATHS "${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/lib" NO_DEFAULT_PATH)
+
+if(LIB_BUSYQ_SCAN)
+    add_executable(busyq-scan src/busyq_scan_main.c)
+
+    target_include_directories(busyq-scan PRIVATE
+        src
+        "${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/include"
+    )
+
+    # Collect bash libraries for linking (same as the main binary)
+    set(SCAN_BASH_LIBS "")
+    foreach(_lib LIB_BASH LIB_BUILTINS LIB_READLINE LIB_HISTORY LIB_GLOB LIB_TILDE LIB_SH)
+        if(${_lib})
+            list(APPEND SCAN_BASH_LIBS ${${_lib}})
+        endif()
+    endforeach()
+    if(LIB_NCURSES)
+        list(APPEND SCAN_BASH_LIBS ${LIB_NCURSES})
+    endif()
+
+    target_link_libraries(busyq-scan PRIVATE
+        "${LIB_BUSYQ_SCAN}"
+        ${SCAN_BASH_LIBS}
+        m dl pthread
+    )
+
+    # Interpose reader_loop with our AST walker, exit for multi-file
+    target_link_options(busyq-scan PRIVATE
+        -static
+        -Wl,--gc-sections
+        -Wl,--wrap=reader_loop
+        -Wl,--wrap=exit
+    )
+endif()
+
+# =====================================================================
 # Install
 # =====================================================================
 install(TARGETS busyq RUNTIME DESTINATION bin)
+
+if(TARGET busyq-scan)
+    install(TARGETS busyq-scan RUNTIME DESTINATION bin)
+endif()
 
 # Install the library and header for custom builds
 install(FILES "${BUSYQ_LIB}" DESTINATION lib OPTIONAL)
 install(FILES src/applet_table.h DESTINATION include/busyq)
 install(FILES src/applets.def DESTINATION share/busyq)
 install(PROGRAMS scripts/gen-applet-table.sh DESTINATION share/busyq)
-install(PROGRAMS scripts/busyq-scan DESTINATION bin)

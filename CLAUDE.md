@@ -6,13 +6,15 @@ upstream GNU tools. Intended for distroless containers and script shebangs.
 Always launches as bash, with all bundled tools available as pseudo-builtins.
 
 ## Project layout
-- `src/` - C source for entry point and applet table
+- `src/` - C source for entry point, applet table, and scanner
 - `src/applets.def` - Canonical applet registry (machine-readable)
+- `src/busyq_scan_main.c` - Scanner binary entry point + classifier
+- `src/busyq_scan_walk.c` - AST walker (compiled within bash port)
+- `src/busyq_scan.h` - Shared types for scanner components
 - `ports/` - vcpkg overlay ports (bash, curl, jq, coreutils, future tools)
-- `scripts/busyq-scan` - Bash script command analyzer
 - `scripts/gen-applet-table.sh` - Generates applet_table.c from applets.def
 - `scripts/` - Other helper scripts (cert generation, dev container)
-- `CMakeLists.txt` - Builds libbusyq.a (library) + busyq (binary)
+- `CMakeLists.txt` - Builds libbusyq.a (library) + busyq + busyq-scan
 - `CMakePresets.json` - Build presets (vcpkg toolchain, no-ssl/ssl variants)
 - `Dockerfile` - Multi-stage build (uses p120ph37/alpine-clang-vcpkg)
 - `PLAN.md` - Roadmap for adding upstream GNU tool replacements
@@ -29,10 +31,10 @@ Produces:
 ### Custom builds (minimal binary for a specific script)
 ```sh
 # 1. Scan a bash script to find what commands it uses
-scripts/busyq-scan myscript.sh
+busyq-scan myscript.sh
 
 # 2. Get the applet list in cmake format
-scripts/busyq-scan --cmake myscript.sh
+busyq-scan --cmake myscript.sh
 #  → -DBUSYQ_APPLETS=cat;curl;jq;ls;mkdir;sort
 
 # 3a. Build with cmake (if in the build environment)

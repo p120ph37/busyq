@@ -112,6 +112,24 @@ foreach(RLIB IN ITEMS "libreadline.a" "libhistory.a")
     endif()
 endforeach()
 
+# --- Build the busyq-scan AST walker ---
+# This must be compiled here (not in the top-level CMakeLists.txt) because
+# it needs bash's internal headers (command.h, shell.h, flags.h, etc.)
+# which are only available inside the bash source/build tree.
+set(_scan_walk_src "${CURRENT_PORT_DIR}/../../src/busyq_scan_walk.c")
+if(EXISTS "${_scan_walk_src}")
+    vcpkg_execute_required_process(
+        COMMAND sh -c "cc -DHAVE_CONFIG_H -DSHELL -I'${BASH_BUILD_DIR}' -I'${SOURCE_PATH}' -I'${SOURCE_PATH}/include' -I'${SOURCE_PATH}/builtins' ${EXTRA_CFLAGS} -c '${_scan_walk_src}' -o '${BASH_BUILD_DIR}/busyq_scan_walk.o'"
+        WORKING_DIRECTORY "${BASH_BUILD_DIR}"
+        LOGNAME "compile-busyq-scan-walk-${TARGET_TRIPLET}"
+    )
+    vcpkg_execute_required_process(
+        COMMAND ar rcs "${CURRENT_PACKAGES_DIR}/lib/libbusyq_scan.a" "${BASH_BUILD_DIR}/busyq_scan_walk.o"
+        WORKING_DIRECTORY "${BASH_BUILD_DIR}"
+        LOGNAME "ar-libbusyq-scan-${TARGET_TRIPLET}"
+    )
+endif()
+
 # Install key headers
 file(INSTALL
     "${SOURCE_PATH}/shell.h"
