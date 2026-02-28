@@ -80,12 +80,11 @@ endfunction()
 # then runs `make <target>.o` with -Dmain=<tool>_main added to CPPFLAGS.
 # This preserves all compiler flags, include paths, etc. from the Makefile.
 #
-# Handles three build layouts:
-#   1. Recursive make (Makefile in each subdirectory, e.g. GNU grep)
-#   2. Non-recursive make with simple names (src/main.o)
-#   3. Non-recursive make with automake name mangling (src/lsof-main.o)
-# For (3), automake renames objects when per-program variables exist.
-# We detect the actual .o name by globbing the build tree after the build.
+# Automake may mangle object file names when per-program variables exist
+# (e.g., src/main.c → src/xz-main.o). We always glob the build tree to
+# find the actual .o name rather than guessing from the source filename.
+# Works for both recursive make (Makefile per subdirectory) and
+# non-recursive make (single top-level Makefile).
 function(busyq_post_build_rename_main _tool _prefix_h)
     # Find the first existing candidate source file
     set(_source "")
@@ -106,28 +105,33 @@ function(busyq_post_build_rename_main _tool _prefix_h)
 
     set(_build_rel "${CURRENT_BUILDTREES_DIR}/${TARGET_TRIPLET}-rel")
 
+    # Find the actual .o file in the build tree.  Automake per-program
+    # variables cause name mangling (main.c → xz-main.o), so we glob
+    # for both the plain name and the *-<name>.o pattern.
+    if(_dir)
+        set(_search_dir "${_build_rel}/${_dir}")
+    else()
+        set(_search_dir "${_build_rel}")
+    endif()
+
+    file(GLOB _obj_matches
+        "${_search_dir}/${_name}.o"
+        "${_search_dir}/*-${_name}.o"
+    )
+
+    # Determine working directory and target based on build layout
     if(_dir AND EXISTS "${_build_rel}/${_dir}/Makefile")
-        # Recursive make: Makefile in subdirectory, target is just the basename
+        # Recursive make: run from subdirectory
         set(_work_dir "${_build_rel}/${_dir}")
-        set(_target "${_name}.o")
+        if(_obj_matches)
+            list(GET _obj_matches 0 _obj)
+            get_filename_component(_target "${_obj}" NAME)
+        else()
+            set(_target "${_name}.o")
+        endif()
     else()
         # Non-recursive make: run from build root
         set(_work_dir "${_build_rel}")
-
-        # The .o file may have a different name than the source due to automake
-        # per-program name mangling (e.g., src/main.c → src/lsof-main.o).
-        # Glob the build tree to find the actual name.
-        if(_dir)
-            set(_search_dir "${_build_rel}/${_dir}")
-        else()
-            set(_search_dir "${_build_rel}")
-        endif()
-
-        file(GLOB _obj_matches
-            "${_search_dir}/${_name}.o"
-            "${_search_dir}/*-${_name}.o"
-        )
-
         if(_obj_matches)
             list(GET _obj_matches 0 _obj)
             file(RELATIVE_PATH _target "${_build_rel}" "${_obj}")
