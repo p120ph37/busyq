@@ -17,11 +17,15 @@ busyq_gen_prefix_header(less "${_prefix_h}")
 set(LESS_CC "${VCPKG_DETECTED_CMAKE_C_COMPILER}")
 set(LESS_CFLAGS "${VCPKG_DETECTED_CMAKE_C_FLAGS} ${VCPKG_DETECTED_CMAKE_C_FLAGS_RELEASE}")
 
+# Rename main() at source level (LTO-safe — do NOT use -Dmain in CPPFLAGS,
+# it breaks autotools helper programs)
+busyq_rename_main(less "${SOURCE_PATH}/main.c")
+
 vcpkg_configure_make(
     SOURCE_PATH "${SOURCE_PATH}"
 )
 
-vcpkg_build_make(OPTIONS "CPPFLAGS=-include ${_prefix_h} -Dmain=less_main")
+vcpkg_build_make(OPTIONS "CPPFLAGS=-include ${_prefix_h}")
 
 set(LESS_BUILD_REL "${CURRENT_BUILDTREES_DIR}/${TARGET_TRIPLET}-rel")
 

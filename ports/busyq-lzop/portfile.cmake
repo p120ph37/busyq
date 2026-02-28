@@ -19,6 +19,10 @@ set(LZOP_CFLAGS "${VCPKG_DETECTED_CMAKE_C_FLAGS} ${VCPKG_DETECTED_CMAKE_C_FLAGS_
 
 set(ENV{FORCE_UNSAFE_CONFIGURE} "1")
 
+# Rename main() at source level (LTO-safe — do NOT use -Dmain in CPPFLAGS,
+# it breaks autotools helper programs)
+busyq_rename_main(lzop "${SOURCE_PATH}/src/lzop.c")
+
 # lzop depends on lzo2 library — find its headers and library from vcpkg
 set(LZO_INCLUDE "${CURRENT_INSTALLED_DIR}/include")
 set(LZO_LIB "${CURRENT_INSTALLED_DIR}/lib")
@@ -31,7 +35,7 @@ vcpkg_configure_make(
         "LDFLAGS=-L${LZO_LIB}"
 )
 
-vcpkg_build_make(OPTIONS "CPPFLAGS=-include ${_prefix_h} -Dmain=lzop_main")
+vcpkg_build_make(OPTIONS "CPPFLAGS=-include ${_prefix_h}")
 
 set(LZOP_BUILD_REL "${CURRENT_BUILDTREES_DIR}/${TARGET_TRIPLET}-rel")
 

@@ -21,6 +21,14 @@ set(ED_CFLAGS "${VCPKG_DETECTED_CMAKE_C_FLAGS} ${VCPKG_DETECTED_CMAKE_C_FLAGS_RE
 # Allow running configure as root inside containers
 set(ENV{FORCE_UNSAFE_CONFIGURE} "1")
 
+# Rename main() at source level (LTO-safe — do NOT use -Dmain in CPPFLAGS,
+# it breaks helper programs compiled during make)
+busyq_rename_main(ed
+    "${SOURCE_PATH}/main.c"
+    "${SOURCE_PATH}/ed.c"
+    "${SOURCE_PATH}/main_loop.c"
+)
+
 set(ED_BUILD_REL "${CURRENT_BUILDTREES_DIR}/${TARGET_TRIPLET}-rel")
 
 # Create build directory for out-of-tree build
@@ -42,7 +50,7 @@ vcpkg_execute_required_process(
 
 # Build with compile-time prefix header and main rename
 vcpkg_execute_required_process(
-    COMMAND make -j${VCPKG_CONCURRENCY} "CPPFLAGS=-include ${_prefix_h} -Dmain=ed_main"
+    COMMAND make -j${VCPKG_CONCURRENCY} "CPPFLAGS=-include ${_prefix_h}"
     WORKING_DIRECTORY "${ED_BUILD_REL}"
     LOGNAME "build-${TARGET_TRIPLET}"
 )

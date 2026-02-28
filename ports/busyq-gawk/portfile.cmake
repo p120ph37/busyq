@@ -20,6 +20,10 @@ busyq_gen_prefix_header(gawk "${_prefix_h}")
 # Allow running configure as root inside containers
 set(ENV{FORCE_UNSAFE_CONFIGURE} "1")
 
+# Rename main() at source level (LTO-safe — do NOT use -Dmain in CPPFLAGS,
+# it breaks autotools helper programs)
+busyq_rename_main(gawk "${SOURCE_PATH}/main.c")
+
 vcpkg_configure_make(
     SOURCE_PATH "${SOURCE_PATH}"
     OPTIONS
@@ -29,7 +33,7 @@ vcpkg_configure_make(
         --disable-nls
 )
 
-vcpkg_build_make(OPTIONS "CPPFLAGS=-include ${_prefix_h} -Dmain=gawk_main")
+vcpkg_build_make(OPTIONS "CPPFLAGS=-include ${_prefix_h}")
 
 set(GAWK_BUILD_REL "${CURRENT_BUILDTREES_DIR}/${TARGET_TRIPLET}-rel")
 

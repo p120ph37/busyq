@@ -23,6 +23,14 @@ set(LSOF_CFLAGS "${VCPKG_DETECTED_CMAKE_C_FLAGS} ${VCPKG_DETECTED_CMAKE_C_FLAGS_
 # FORCE_UNSAFE_CONFIGURE=1: allow running configure as root inside containers
 set(ENV{FORCE_UNSAFE_CONFIGURE} "1")
 
+# Rename main() at source level (LTO-safe — do NOT use -Dmain in CPPFLAGS,
+# it breaks autotools helper programs)
+busyq_rename_main(lsof
+    "${SOURCE_PATH}/src/lsof.c"
+    "${SOURCE_PATH}/src/main.c"
+    "${SOURCE_PATH}/lsof.c"
+)
+
 vcpkg_configure_make(
     SOURCE_PATH "${SOURCE_PATH}"
     OPTIONS
@@ -32,7 +40,7 @@ vcpkg_configure_make(
 
 # lsof 4.99.5 builds man pages requiring soelim (groff). Build only the
 # binary and library targets we need, skipping documentation.
-vcpkg_build_make(BUILD_TARGET lsof OPTIONS "CPPFLAGS=-include ${_prefix_h} -Dmain=lsof_main")
+vcpkg_build_make(BUILD_TARGET lsof OPTIONS "CPPFLAGS=-include ${_prefix_h}")
 
 set(LSOF_BUILD_REL "${CURRENT_BUILDTREES_DIR}/${TARGET_TRIPLET}-rel")
 
