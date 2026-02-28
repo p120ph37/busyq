@@ -80,8 +80,12 @@ endfunction()
 # then runs `make <target>.o` with -Dmain=<tool>_main added to CPPFLAGS.
 # This preserves all compiler flags, include paths, etc. from the Makefile.
 #
-# Handles both recursive make (Makefile in each subdirectory, e.g. GNU grep)
-# and non-recursive make (single top-level Makefile, e.g. lsof, procps).
+# Handles three build layouts:
+#   1. Recursive make (Makefile in each subdirectory, e.g. GNU grep)
+#   2. Non-recursive make with simple names (src/main.o)
+#   3. Non-recursive make with automake name mangling (src/lsof-main.o)
+# For (3), automake renames objects when per-program variables exist.
+# We detect the actual .o name by globbing the build tree after the build.
 function(busyq_post_build_rename_main _tool _prefix_h)
     # Find the first existing candidate source file
     set(_source "")
@@ -102,19 +106,32 @@ function(busyq_post_build_rename_main _tool _prefix_h)
 
     set(_build_rel "${CURRENT_BUILDTREES_DIR}/${TARGET_TRIPLET}-rel")
 
-    # Detect recursive vs non-recursive make:
-    # - Recursive make: Makefile exists in the subdirectory (e.g. build/src/Makefile)
-    #   → run `make <name>.o` from the subdirectory
-    # - Non-recursive make: only the top-level Makefile exists
-    #   → run `make <dir>/<name>.o` from the build root
     if(_dir AND EXISTS "${_build_rel}/${_dir}/Makefile")
-        # Recursive make: cd into subdirectory, target is just the basename
+        # Recursive make: Makefile in subdirectory, target is just the basename
         set(_work_dir "${_build_rel}/${_dir}")
         set(_target "${_name}.o")
     else()
-        # Non-recursive make (or source at root): run from build root
+        # Non-recursive make: run from build root
         set(_work_dir "${_build_rel}")
+
+        # The .o file may have a different name than the source due to automake
+        # per-program name mangling (e.g., src/main.c → src/lsof-main.o).
+        # Glob the build tree to find the actual name.
         if(_dir)
+            set(_search_dir "${_build_rel}/${_dir}")
+        else()
+            set(_search_dir "${_build_rel}")
+        endif()
+
+        file(GLOB _obj_matches
+            "${_search_dir}/${_name}.o"
+            "${_search_dir}/*-${_name}.o"
+        )
+
+        if(_obj_matches)
+            list(GET _obj_matches 0 _obj)
+            file(RELATIVE_PATH _target "${_build_rel}" "${_obj}")
+        elseif(_dir)
             set(_target "${_dir}/${_name}.o")
         else()
             set(_target "${_name}.o")
