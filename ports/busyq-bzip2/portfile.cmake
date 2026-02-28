@@ -54,6 +54,7 @@ vcpkg_execute_required_process(
         ld -r --whole-archive libbzip2_raw.a -o bzip2_combined.o \
             -z muldefs 2>/dev/null \
         || ld -r --whole-archive libbzip2_raw.a -o bzip2_combined.o
+        llvm-objcopy --wildcard --keep-global-symbol='*_main' bzip2_combined.o
 
         # Package into final archive
         ar rcs '${CURRENT_PACKAGES_DIR}/lib/libbzip2.a' bzip2_combined.o

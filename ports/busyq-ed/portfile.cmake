@@ -85,6 +85,7 @@ vcpkg_execute_required_process(
         ld -r --whole-archive libed_raw.a -o ed_combined.o \
             -z muldefs 2>/dev/null \
         || ld -r --whole-archive libed_raw.a -o ed_combined.o
+        llvm-objcopy --wildcard --keep-global-symbol='*_main' ed_combined.o
 
         # Package into final archive
         ar rcs '${CURRENT_PACKAGES_DIR}/lib/libed.a' ed_combined.o

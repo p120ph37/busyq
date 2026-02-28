@@ -80,8 +80,10 @@ file(MAKE_DIRECTORY "${CURRENT_PACKAGES_DIR}/lib")
 # Bash doesn't produce a single libbash.a. Collect top-level .o files
 # and pack them, plus install sub-libraries.
 file(GLOB BASH_OBJS "${BASH_BUILD_DIR}/*.o")
-# Exclude the stub - it's only for build-time linking
+# Exclude build-time utility objects that shouldn't be in the library
 list(FILTER BASH_OBJS EXCLUDE REGEX "busyq_stub\\.o$")
+list(FILTER BASH_OBJS EXCLUDE REGEX "mksignames\\.o$")
+list(FILTER BASH_OBJS EXCLUDE REGEX "mksyntax\\.o$")
 
 if(BASH_OBJS)
     vcpkg_execute_required_process(
@@ -94,7 +96,7 @@ endif()
 # Recompile shell.o with -Dmain=bash_main using make (to pick up all SYSTEM_FLAGS)
 # and replace it in the archive
 vcpkg_execute_required_process(
-    COMMAND sh -c "rm -f shell.o && make shell.o 'ADDON_CFLAGS=-Dmain=bash_main' && cp shell.o '${BASH_BUILD_DIR}/shell_renamed.o' && ar rs '${CURRENT_PACKAGES_DIR}/lib/libbash.a' '${BASH_BUILD_DIR}/shell_renamed.o'"
+    COMMAND sh -c "rm -f shell.o && make shell.o 'ADDON_CFLAGS=-Dmain=bash_main' && ar d '${CURRENT_PACKAGES_DIR}/lib/libbash.a' shell.o && ar rs '${CURRENT_PACKAGES_DIR}/lib/libbash.a' shell.o"
     WORKING_DIRECTORY "${BASH_BUILD_DIR}"
     LOGNAME "compile-bash-main-rename-${TARGET_TRIPLET}"
 )

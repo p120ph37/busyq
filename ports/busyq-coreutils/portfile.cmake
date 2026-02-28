@@ -160,6 +160,7 @@ vcpkg_execute_required_process(
         ld -r --whole-archive libcoreutils_raw.a -o coreutils_combined.o \
             -z muldefs 2>/dev/null \
         || ld -r --whole-archive libcoreutils_raw.a -o coreutils_combined.o
+        llvm-objcopy --wildcard --keep-global-symbol='single_binary_main_*' coreutils_combined.o
 
         # Package into final archive (no objcopy — bitcode preserved)
         ar rcs '${CURRENT_PACKAGES_DIR}/lib/libcoreutils.a' coreutils_combined.o

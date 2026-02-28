@@ -91,6 +91,7 @@ vcpkg_execute_required_process(
         ld -r --whole-archive libzip_raw.a -o zip_combined.o \
             -z muldefs 2>/dev/null \
         || ld -r --whole-archive libzip_raw.a -o zip_combined.o
+        llvm-objcopy --wildcard --keep-global-symbol='*_main' zip_combined.o
 
         ar rcs '${CURRENT_PACKAGES_DIR}/lib/libzip.a' zip_combined.o
     "
@@ -164,6 +165,7 @@ vcpkg_execute_required_process(
         ld -r --whole-archive libunzip_raw.a -o unzip_combined.o \
             -z muldefs 2>/dev/null \
         || ld -r --whole-archive libunzip_raw.a -o unzip_combined.o
+        llvm-objcopy --wildcard --keep-global-symbol='*_main' unzip_combined.o
 
         ar rcs '${CURRENT_PACKAGES_DIR}/lib/libunzip.a' unzip_combined.o
     "

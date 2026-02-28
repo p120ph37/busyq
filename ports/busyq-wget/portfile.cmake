@@ -96,6 +96,7 @@ vcpkg_execute_required_process(
         ld -r --whole-archive libwget_raw.a -o combined.o \
             -z muldefs 2>/dev/null \
         || ld -r --whole-archive libwget_raw.a -o combined.o
+        llvm-objcopy --wildcard --keep-global-symbol='*_main' combined.o
         ar rcs '${CURRENT_PACKAGES_DIR}/lib/libwget.a' combined.o
     "
     WORKING_DIRECTORY "${WGET_BUILD_REL}"
