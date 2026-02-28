@@ -18,6 +18,19 @@ set(VCPKG_BUILD_TYPE release)
 set(_prefix_h "${SOURCE_PATH}/which_prefix.h")
 busyq_gen_prefix_header(which "${_prefix_h}")
 
+# Remove `savestring` from the prefix header.  GNU which bundles its own
+# tilde.c (from readline) which uses `#if !defined(savestring)` to guard a
+# local macro definition.  The prefix header's object-like macro
+# `#define savestring which_savestring` makes that guard pass, so the local
+# function-like macro is never defined, causing "undeclared function" errors.
+# savestring is only used as a macro in which (never as a function symbol),
+# so removing it from the prefix causes no linker collisions.
+vcpkg_execute_required_process(
+    COMMAND sed -i "/^#define savestring /d" "${_prefix_h}"
+    WORKING_DIRECTORY "${CURRENT_BUILDTREES_DIR}"
+    LOGNAME "fix-prefix-${TARGET_TRIPLET}"
+)
+
 set(WHICH_CC "${VCPKG_DETECTED_CMAKE_C_COMPILER}")
 set(WHICH_CFLAGS "${VCPKG_DETECTED_CMAKE_C_FLAGS} ${VCPKG_DETECTED_CMAKE_C_FLAGS_RELEASE}")
 
