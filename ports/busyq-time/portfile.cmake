@@ -53,7 +53,7 @@ if(NOT TIME_OBJS)
 endif()
 
 vcpkg_execute_required_process(
-    COMMAND ar rcs "${TIME_BUILD_REL}/lib_raw.a"" ${TIME_OBJS}
+    COMMAND ar rcs "${TIME_BUILD_REL}/lib_raw.a" ${TIME_OBJS}
     WORKING_DIRECTORY "${TIME_BUILD_REL}"
     LOGNAME "ar-raw-${TARGET_TRIPLET}"
 )

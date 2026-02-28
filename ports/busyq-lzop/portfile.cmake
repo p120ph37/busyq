@@ -50,7 +50,7 @@ endif()
 
 # Pack into temporary archive
 vcpkg_execute_required_process(
-    COMMAND ar rcs "${LZOP_BUILD_REL}/lib_raw.a"" ${LZOP_OBJS}
+    COMMAND ar rcs "${LZOP_BUILD_REL}/lib_raw.a" ${LZOP_OBJS}
     WORKING_DIRECTORY "${LZOP_BUILD_REL}"
     LOGNAME "ar-raw-${TARGET_TRIPLET}"
 )

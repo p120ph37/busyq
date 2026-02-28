@@ -47,7 +47,7 @@ endif()
 
 # Pack into temporary archive
 vcpkg_execute_required_process(
-    COMMAND ar rcs "${CPIO_BUILD_REL}/lib_raw.a"" ${CPIO_OBJS}
+    COMMAND ar rcs "${CPIO_BUILD_REL}/lib_raw.a" ${CPIO_OBJS}
     WORKING_DIRECTORY "${CPIO_BUILD_REL}"
     LOGNAME "ar-raw-${TARGET_TRIPLET}"
 )

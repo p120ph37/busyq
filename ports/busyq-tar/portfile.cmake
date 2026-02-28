@@ -50,7 +50,7 @@ endif()
 
 # Pack into temporary archive
 vcpkg_execute_required_process(
-    COMMAND ar rcs "${TAR_BUILD_REL}/lib_raw.a"" ${TAR_OBJS}
+    COMMAND ar rcs "${TAR_BUILD_REL}/lib_raw.a" ${TAR_OBJS}
     WORKING_DIRECTORY "${TAR_BUILD_REL}"
     LOGNAME "ar-raw-${TARGET_TRIPLET}"
 )
