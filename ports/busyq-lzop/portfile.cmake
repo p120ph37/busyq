@@ -1,4 +1,5 @@
 include("${CMAKE_CURRENT_LIST_DIR}/../../scripts/cmake/busyq_alpine_helpers.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/../../scripts/cmake/busyq_symbol_helpers.cmake")
 
 busyq_alpine_source(
     PORT_DIR "${CMAKE_CURRENT_LIST_DIR}"
@@ -8,6 +9,10 @@ busyq_alpine_source(
 # Detect toolchain flags (CC, CFLAGS with LTO/optimization)
 vcpkg_cmake_get_vars(cmake_vars_file)
 include("${cmake_vars_file}")
+
+# --- Generate compile-time symbol prefix header (LTO-safe) ---
+set(_prefix_h "${SOURCE_PATH}/lzop_prefix.h")
+busyq_gen_prefix_header(lzop "${_prefix_h}")
 
 set(LZOP_CC "${VCPKG_DETECTED_CMAKE_C_COMPILER}")
 set(LZOP_CFLAGS "${VCPKG_DETECTED_CMAKE_C_FLAGS} ${VCPKG_DETECTED_CMAKE_C_FLAGS_RELEASE}")
@@ -26,7 +31,7 @@ vcpkg_configure_make(
         "LDFLAGS=-L${LZO_LIB}"
 )
 
-vcpkg_build_make()
+vcpkg_build_make(OPTIONS "CPPFLAGS=-include ${_prefix_h} -Dmain=lzop_main")
 
 set(LZOP_BUILD_REL "${CURRENT_BUILDTREES_DIR}/${TARGET_TRIPLET}-rel")
 
@@ -45,41 +50,23 @@ endif()
 
 # Pack into temporary archive
 vcpkg_execute_required_process(
-    COMMAND ar rcs "${LZOP_BUILD_REL}/liblzop_raw.a" ${LZOP_OBJS}
+    COMMAND ar rcs "${LZOP_BUILD_REL}/lib_raw.a"" ${LZOP_OBJS}
     WORKING_DIRECTORY "${LZOP_BUILD_REL}"
     LOGNAME "ar-raw-${TARGET_TRIPLET}"
 )
 
 # Combine, prefix, unprefix, rename
+# Combine objects and package (no objcopy — compile-time prefix preserves bitcode)
 vcpkg_execute_required_process(
     COMMAND sh -c "
         set -e
-
-        # Combine all objects into one relocatable .o
-        ld -r --whole-archive liblzop_raw.a -o lzop_combined.o \
+        ld -r --whole-archive lib_raw.a -o combined.o \
             -z muldefs 2>/dev/null \
-        || ld -r --whole-archive liblzop_raw.a -o lzop_combined.o
-
-        # Record undefined symbols (external deps: libc, lzo2, etc.)
-        nm -u lzop_combined.o | sed 's/.* //' | sort -u > undef_syms.txt
-
-        # Prefix all symbols with lzop_
-        objcopy --prefix-symbols=lzop_ lzop_combined.o
-
-        # Generate redefine map to unprefix external deps
-        sed 's/.*/lzop_& &/' undef_syms.txt > redefine.map
-
-        # Rename lzop_main -> lzop_main (entry point)
-        # After prefix, main becomes lzop_main which is already the desired name
-        echo 'lzop_main lzop_main' >> redefine.map
-
-        objcopy --redefine-syms=redefine.map lzop_combined.o
-
-        # Package into final archive
-        ar rcs '${CURRENT_PACKAGES_DIR}/lib/liblzop.a' lzop_combined.o
+        || ld -r --whole-archive lib_raw.a -o combined.o
+        ar rcs '${CURRENT_PACKAGES_DIR}/lib/liblzop.a' combined.o
     "
     WORKING_DIRECTORY "${LZOP_BUILD_REL}"
-    LOGNAME "symbol-isolate-${TARGET_TRIPLET}"
+    LOGNAME "combine-${TARGET_TRIPLET}"
 )
 
 # Suppress vcpkg post-build warnings

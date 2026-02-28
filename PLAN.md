@@ -32,9 +32,10 @@ prefixed libc names back to real ones, or use a linker script. The vcpkg
 portfile will generate the redefine-syms map automatically.
 
 ### Applet dispatch (replacing busybox)
-Expand `src/applet_table.c` from the current busybox-sentinel design to a
-flat table of `{name, main_func}` entries. The bash findcmd.c patches are
-already generic and need no changes.
+Applet registry in `src/applets.h` (X-macro) with dispatch in `src/applets.c`.
+Custom builds use `-DBUSYQ_CUSTOM_APPLETS -DAPPLET_<name>=1` to select
+applets at compile time; LTO strips unreferenced entry functions.
+The bash findcmd.c patches are already generic and need no changes.
 
 For multi-command packages (coreutils, findutils, procps-ng), the package
 provides one entry-point main that dispatches internally based on argv[0].
@@ -51,7 +52,7 @@ sets argv[0] before calling.
 - [ ] Remove `ports/busyq-busybox/` vcpkg port
 - [ ] Remove `src/bb_namespace.h`
 - [ ] Remove `config/busybox.config`
-- [ ] Refactor `src/applet_table.c`: remove busybox sentinel, `find_applet_by_name()` call, `bb_entry_main()` reference. Keep only extra_applets[] (curl, jq, ssl_client).
+- [x] Refactor applet dispatch: replaced `src/applet_table.c` with `src/applets.h` (X-macro registry) + `src/applets.c` (preprocessor-filtered dispatch table).
 - [ ] Update `CMakeLists.txt`: remove libbusybox.a from link step
 - [ ] Update `vcpkg.json` manifest: remove busyq-busybox dependency
 - [ ] Verify: `busyq -c 'echo hello'` works, `busyq -c 'curl --version'` works, `busyq -c 'jq --version'` works
@@ -74,7 +75,7 @@ uptime, users, vdir, wc, who, whoami, yes
   - Configure with `--enable-single-binary=shebangs` (multi-call mode)
   - Build as static library with `-Dmain=coreutils_main`
   - Apply symbol prefixing for gnulib isolation
-- [ ] Add coreutils applet entries to applet_table.c (each name → coreutils_main)
+- [x] Add coreutils applet entries to applets.h (each name → coreutils_main)
 - [ ] Update CMakeLists.txt link step
 - [ ] Smoke test core commands: ls, cp, cat, date, sort, etc.
 

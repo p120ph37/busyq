@@ -1,4 +1,5 @@
 include("${CMAKE_CURRENT_LIST_DIR}/../../scripts/cmake/busyq_alpine_helpers.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/../../scripts/cmake/busyq_symbol_helpers.cmake")
 
 busyq_alpine_source(
     PORT_DIR "${CMAKE_CURRENT_LIST_DIR}"
@@ -9,29 +10,34 @@ busyq_alpine_source(
 vcpkg_cmake_get_vars(cmake_vars_file)
 include("${cmake_vars_file}")
 
+# --- Generate compile-time symbol prefix header (LTO-safe) ---
+set(_prefix_h "${SOURCE_PATH}/d2u_prefix.h")
+busyq_gen_prefix_header(d2u "${_prefix_h}")
+
 set(D2U_CC "${VCPKG_DETECTED_CMAKE_C_COMPILER}")
 set(D2U_CFLAGS "${VCPKG_DETECTED_CMAKE_C_FLAGS} ${VCPKG_DETECTED_CMAKE_C_FLAGS_RELEASE}")
 
 file(MAKE_DIRECTORY "${CURRENT_PACKAGES_DIR}/lib")
 
-# --- Symbol isolation ---
-# dos2unix and unix2dos are the same binary dispatching on argv[0].
-# The main source files are dos2unix.c, querycp.c, common.c.
-# We compile them manually and apply symbol isolation.
+set(D2U_BUILD_DIR "${CURRENT_BUILDTREES_DIR}/${TARGET_TRIPLET}-rel")
+file(MAKE_DIRECTORY "${D2U_BUILD_DIR}")
 
+# --- Compile and combine (compile-time prefix preserves bitcode) ---
+# dos2unix and unix2dos are the same binary dispatching on argv[0].
 vcpkg_execute_required_process(
     COMMAND sh -c "
         set -e
 
-        # Compile key source files
-        # dos2unix.c contains the main() that dispatches on argv[0]
-        ${D2U_CC} ${D2U_CFLAGS} -I'${SOURCE_PATH}' -DVER_REVISION='\"7.5.2\"' -DVER_DATE='\"2024-01-22\"' \
+        PREFIX_FLAGS='-include ${_prefix_h} -Dmain=dos2unix_main'
+
+        # Compile key source files with compile-time prefix
+        ${D2U_CC} ${D2U_CFLAGS} \$PREFIX_FLAGS -I'${SOURCE_PATH}' -DVER_REVISION='\"7.5.2\"' -DVER_DATE='\"2024-01-22\"' \
             -DVER_AUTHOR='\"\"' -DDEBUG=0 -UD2U_UNIFILE \
             -c '${SOURCE_PATH}/dos2unix.c' -o dos2unix.o
-        ${D2U_CC} ${D2U_CFLAGS} -I'${SOURCE_PATH}' -DVER_REVISION='\"7.5.2\"' -DVER_DATE='\"2024-01-22\"' \
+        ${D2U_CC} ${D2U_CFLAGS} \$PREFIX_FLAGS -I'${SOURCE_PATH}' -DVER_REVISION='\"7.5.2\"' -DVER_DATE='\"2024-01-22\"' \
             -DDEBUG=0 -UD2U_UNIFILE \
             -c '${SOURCE_PATH}/querycp.c' -o querycp.o
-        ${D2U_CC} ${D2U_CFLAGS} -I'${SOURCE_PATH}' -DVER_REVISION='\"7.5.2\"' -DVER_DATE='\"2024-01-22\"' \
+        ${D2U_CC} ${D2U_CFLAGS} \$PREFIX_FLAGS -I'${SOURCE_PATH}' -DVER_REVISION='\"7.5.2\"' -DVER_DATE='\"2024-01-22\"' \
             -DDEBUG=0 -UD2U_UNIFILE \
             -c '${SOURCE_PATH}/common.c' -o common.o
 
@@ -43,25 +49,10 @@ vcpkg_execute_required_process(
             -z muldefs 2>/dev/null \
         || ld -r --whole-archive libd2u_raw.a -o d2u_combined.o
 
-        # Record undefined symbols
-        nm -u d2u_combined.o | sed 's/.* //' | sort -u > undef_syms.txt
-
-        # Prefix all symbols with d2u_
-        objcopy --prefix-symbols=d2u_ d2u_combined.o
-
-        # Generate redefine map to unprefix external deps
-        sed 's/.*/d2u_& &/' undef_syms.txt > redefine.map
-
-        # Map entry point: d2u_main -> dos2unix_main
-        # (dos2unix dispatches on argv[0] for both dos2unix and unix2dos)
-        echo 'd2u_main dos2unix_main' >> redefine.map
-
-        objcopy --redefine-syms=redefine.map d2u_combined.o
-
         # Package into final archive
         ar rcs '${CURRENT_PACKAGES_DIR}/lib/libdos2unix.a' d2u_combined.o
     "
-    WORKING_DIRECTORY "${CURRENT_BUILDTREES_DIR}"
+    WORKING_DIRECTORY "${D2U_BUILD_DIR}"
     LOGNAME "build-${TARGET_TRIPLET}"
 )
 

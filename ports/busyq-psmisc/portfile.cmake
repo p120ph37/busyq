@@ -1,5 +1,6 @@
 # busyq-psmisc portfile - uses Alpine-synced source and patches
 include("${CMAKE_CURRENT_LIST_DIR}/../../scripts/cmake/busyq_alpine_helpers.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/../../scripts/cmake/busyq_symbol_helpers.cmake")
 
 busyq_alpine_source(
     PORT_DIR "${CMAKE_CURRENT_LIST_DIR}"
@@ -9,6 +10,10 @@ busyq_alpine_source(
 # Detect toolchain flags
 vcpkg_cmake_get_vars(cmake_vars_file)
 include("${cmake_vars_file}")
+
+# --- Generate compile-time symbol prefix header (LTO-safe) ---
+set(_prefix_h "${SOURCE_PATH}/psmisc_prefix.h")
+busyq_gen_prefix_header(psmisc "${_prefix_h}")
 
 set(ENV{FORCE_UNSAFE_CONFIGURE} "1")
 
@@ -31,7 +36,7 @@ vcpkg_configure_make(
         --without-selinux
 )
 
-vcpkg_build_make()
+vcpkg_build_make(OPTIONS "CPPFLAGS=-include ${_prefix_h}")
 
 set(PSMISC_BUILD_REL "${CURRENT_BUILDTREES_DIR}/${TARGET_TRIPLET}-rel")
 
@@ -55,45 +60,32 @@ vcpkg_execute_required_process(
     LOGNAME "ar-raw-${TARGET_TRIPLET}"
 )
 
+# Rename mains and combine (no --prefix-symbols — compile-time prefix preserves bitcode)
 vcpkg_execute_required_process(
     COMMAND sh -c "
         set -e
 
-        for obj in src/*.o
-do
-            [ -f \"\$obj\" ] || continue
-            if nm \"\$obj\" 2>/dev/null | grep -q ' T main$'
-then
-                bn=\$(basename \"\$obj\" .o)
-                objcopy --redefine-sym main=\${bn}_main_orig \"\$obj\"
+        # Rename main in each tool's object file dynamically
+        for obj in \$(find src/ -name '*.o' ! -path '*/tests/*' ! -path '*/testsuite/*' 2>/dev/null); do
+            if nm \"\$obj\" 2>/dev/null | grep -q ' T main$'; then
+                tool=\$(basename \"\$obj\" .o)
+                objcopy --redefine-sym main=\"\${tool}_main\" \"\$obj\"
             fi
         done
 
         find src/ -name '*.o' ! -path '*/tests/*' ! -path '*/testsuite/*' 2>/dev/null | sort > obj_list.txt
         ar rcs libpsmisc_raw.a \$(cat obj_list.txt) 2>/dev/null || true
 
-        ld -r --whole-archive libpsmisc_raw.a -o psmisc_combined.o \
+        # Combine all objects into one relocatable .o
+        ld -r --whole-archive libpsmisc_raw.a -o combined.o \
             -z muldefs 2>/dev/null \
-        || ld -r --whole-archive libpsmisc_raw.a -o psmisc_combined.o
+        || ld -r --whole-archive libpsmisc_raw.a -o combined.o
 
-        nm -u psmisc_combined.o | sed 's/.* //' | sort -u > undef_syms.txt
-
-        objcopy --prefix-symbols=psmisc_ psmisc_combined.o
-
-        sed 's/.*/psmisc_& &/' undef_syms.txt > redefine.map
-
-        nm psmisc_combined.o 2>/dev/null | grep '_main_orig' | sed 's/.* //' | while read sym
-do
-            tool=\$(echo \"\$sym\" | sed 's/^psmisc_//; s/_main_orig$//')
-            echo \"\$sym \${tool}_main\"
-        done >> redefine.map
-
-        objcopy --redefine-syms=redefine.map psmisc_combined.o
-
-        ar rcs '${CURRENT_PACKAGES_DIR}/lib/libpsmisc.a' psmisc_combined.o
+        # Package into final archive
+        ar rcs '${CURRENT_PACKAGES_DIR}/lib/libpsmisc.a' combined.o
     "
     WORKING_DIRECTORY "${PSMISC_BUILD_REL}"
-    LOGNAME "symbol-isolate-${TARGET_TRIPLET}"
+    LOGNAME "combine-${TARGET_TRIPLET}"
 )
 
 set(VCPKG_POLICY_MISMATCHED_NUMBER_OF_BINARIES enabled)

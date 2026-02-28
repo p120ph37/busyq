@@ -1,4 +1,5 @@
 include("${CMAKE_CURRENT_LIST_DIR}/../../scripts/cmake/busyq_alpine_helpers.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/../../scripts/cmake/busyq_symbol_helpers.cmake")
 
 busyq_alpine_source(
     PORT_DIR "${CMAKE_CURRENT_LIST_DIR}"
@@ -9,6 +10,10 @@ busyq_alpine_source(
 # Detect toolchain flags
 vcpkg_cmake_get_vars(cmake_vars_file)
 include("${cmake_vars_file}")
+
+# --- Generate compile-time symbol prefix header (LTO-safe) ---
+set(_prefix_h "${SOURCE_PATH}/which_prefix.h")
+busyq_gen_prefix_header(which "${_prefix_h}")
 
 set(WHICH_CC "${VCPKG_DETECTED_CMAKE_C_COMPILER}")
 set(WHICH_CFLAGS "${VCPKG_DETECTED_CMAKE_C_FLAGS} ${VCPKG_DETECTED_CMAKE_C_FLAGS_RELEASE}")
@@ -21,7 +26,7 @@ vcpkg_configure_make(
         --disable-nls
 )
 
-vcpkg_build_make()
+vcpkg_build_make(OPTIONS "CPPFLAGS=-include ${_prefix_h} -Dmain=which_main")
 
 set(WHICH_BUILD_REL "${CURRENT_BUILDTREES_DIR}/${TARGET_TRIPLET}-rel")
 
@@ -30,51 +35,35 @@ file(MAKE_DIRECTORY "${CURRENT_PACKAGES_DIR}/lib")
 # --- Symbol isolation ---
 # GNU which is simple but may embed gnulib, so apply full isolation.
 
-# Step 1: Collect object files
-file(GLOB WHICH_OBJS "${WHICH_BUILD_REL}/*.o")
+
+# Collect all object files from the build
+file(GLOB WHICH_OBJS
+    "${WHICH_BUILD_REL}/*.o"
+)
 file(GLOB WHICH_LIB_OBJS "${WHICH_BUILD_REL}/lib/*.o")
 list(APPEND WHICH_OBJS ${WHICH_LIB_OBJS})
 
 if(NOT WHICH_OBJS)
-    message(FATAL_ERROR "No which object files found in ${WHICH_BUILD_REL}")
+    message(FATAL_ERROR "No object files found in ${WHICH_BUILD_REL}")
 endif()
 
-# Step 1a: Pack into temporary archive
+# Pack into temporary archive (needed for ld -r --whole-archive)
 vcpkg_execute_required_process(
     COMMAND ar rcs "${WHICH_BUILD_REL}/libwhich_raw.a" ${WHICH_OBJS}
     WORKING_DIRECTORY "${WHICH_BUILD_REL}"
     LOGNAME "ar-raw-${TARGET_TRIPLET}"
 )
-
-# Steps 2-7: Combine, prefix, unprefix, rename
+# Combine objects and package (no objcopy — compile-time prefix preserves bitcode)
 vcpkg_execute_required_process(
     COMMAND sh -c "
         set -e
-
-        # Combine into one relocatable object
-        ld -r --whole-archive libwhich_raw.a -o which_combined.o \
+        ld -r --whole-archive libwhich_raw.a -o combined.o \
             -z muldefs 2>/dev/null \
-        || ld -r --whole-archive libwhich_raw.a -o which_combined.o
-
-        # Record undefined symbols
-        nm -u which_combined.o | sed 's/.* //' | sort -u > undef_syms.txt
-
-        # Prefix all symbols with which_
-        objcopy --prefix-symbols=which_ which_combined.o
-
-        # Generate redefine map to unprefix external deps
-        sed 's/.*/which_& &/' undef_syms.txt > redefine.map
-
-        # Rename which_main -> which_main (entry point)
-        echo 'which_main which_main' >> redefine.map
-
-        objcopy --redefine-syms=redefine.map which_combined.o
-
-        # Package into final archive
-        ar rcs '${CURRENT_PACKAGES_DIR}/lib/libwhich.a' which_combined.o
+        || ld -r --whole-archive libwhich_raw.a -o combined.o
+        ar rcs '${CURRENT_PACKAGES_DIR}/lib/libwhich.a' combined.o
     "
     WORKING_DIRECTORY "${WHICH_BUILD_REL}"
-    LOGNAME "symbol-isolate-${TARGET_TRIPLET}"
+    LOGNAME "combine-${TARGET_TRIPLET}"
 )
 
 set(VCPKG_POLICY_MISMATCHED_NUMBER_OF_BINARIES enabled)

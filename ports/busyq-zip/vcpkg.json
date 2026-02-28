@@ -4,6 +4,7 @@
   "description": "Info-ZIP zip and unzip built as static libraries for busyq",
   "license": "Info-ZIP",
   "dependencies": [
+    "busyq-bash",
     {
       "name": "vcpkg-cmake-get-vars",
       "host": true

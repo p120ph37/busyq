@@ -1,5 +1,6 @@
 # busyq-time portfile - uses Alpine-synced source and patches
 include("${CMAKE_CURRENT_LIST_DIR}/../../scripts/cmake/busyq_alpine_helpers.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/../../scripts/cmake/busyq_symbol_helpers.cmake")
 
 busyq_alpine_source(
     PORT_DIR "${CMAKE_CURRENT_LIST_DIR}"
@@ -21,6 +22,10 @@ endif()
 vcpkg_cmake_get_vars(cmake_vars_file)
 include("${cmake_vars_file}")
 
+# --- Generate compile-time symbol prefix header (LTO-safe) ---
+set(_prefix_h "${SOURCE_PATH}/time_prefix.h")
+busyq_gen_prefix_header(time "${_prefix_h}")
+
 set(ENV{FORCE_UNSAFE_CONFIGURE} "1")
 
 vcpkg_configure_make(
@@ -29,7 +34,7 @@ vcpkg_configure_make(
         --disable-nls
 )
 
-vcpkg_build_make()
+vcpkg_build_make(OPTIONS "CPPFLAGS=-include ${_prefix_h} -Dmain=time_main")
 
 set(TIME_BUILD_REL "${CURRENT_BUILDTREES_DIR}/${TARGET_TRIPLET}-rel")
 
@@ -48,33 +53,22 @@ if(NOT TIME_OBJS)
 endif()
 
 vcpkg_execute_required_process(
-    COMMAND ar rcs "${TIME_BUILD_REL}/libtime_raw.a" ${TIME_OBJS}
+    COMMAND ar rcs "${TIME_BUILD_REL}/lib_raw.a"" ${TIME_OBJS}
     WORKING_DIRECTORY "${TIME_BUILD_REL}"
     LOGNAME "ar-raw-${TARGET_TRIPLET}"
 )
 
+# Combine objects and package (no objcopy — compile-time prefix preserves bitcode)
 vcpkg_execute_required_process(
     COMMAND sh -c "
         set -e
-
-        ld -r --whole-archive libtime_raw.a -o time_combined.o \
+        ld -r --whole-archive lib_raw.a -o combined.o \
             -z muldefs 2>/dev/null \
-        || ld -r --whole-archive libtime_raw.a -o time_combined.o
-
-        nm -u time_combined.o | sed 's/.* //' | sort -u > undef_syms.txt
-
-        objcopy --prefix-symbols=time_ time_combined.o
-
-        sed 's/.*/time_& &/' undef_syms.txt > redefine.map
-
-        echo 'time_main time_main' >> redefine.map
-
-        objcopy --redefine-syms=redefine.map time_combined.o
-
-        ar rcs '${CURRENT_PACKAGES_DIR}/lib/libtime.a' time_combined.o
+        || ld -r --whole-archive lib_raw.a -o combined.o
+        ar rcs '${CURRENT_PACKAGES_DIR}/lib/libtime.a' combined.o
     "
     WORKING_DIRECTORY "${TIME_BUILD_REL}"
-    LOGNAME "symbol-isolate-${TARGET_TRIPLET}"
+    LOGNAME "combine-${TARGET_TRIPLET}"
 )
 
 set(VCPKG_POLICY_MISMATCHED_NUMBER_OF_BINARIES enabled)

@@ -4,6 +4,7 @@
   "description": "xz-utils built as a static library for busyq",
   "license": "0BSD",
   "dependencies": [
+    "busyq-bash",
     {
       "name": "vcpkg-cmake-get-vars",
       "host": true

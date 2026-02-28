@@ -4,6 +4,7 @@
   "description": "bzip2 built as a static library for busyq",
   "license": "bzip2-1.0.6",
   "dependencies": [
+    "busyq-bash",
     {
       "name": "vcpkg-cmake-get-vars",
       "host": true

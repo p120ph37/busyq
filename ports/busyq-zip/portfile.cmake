@@ -2,6 +2,7 @@
 # Uses Alpine-synced source and patches (6 for zip, 30 for unzip including CVE fixes)
 
 include("${CMAKE_CURRENT_LIST_DIR}/../../scripts/cmake/busyq_alpine_helpers.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/../../scripts/cmake/busyq_symbol_helpers.cmake")
 
 # --- Download and patch both packages ---
 
@@ -24,6 +25,13 @@ busyq_alpine_source(
 vcpkg_cmake_get_vars(cmake_vars_file)
 include("${cmake_vars_file}")
 
+# --- Generate compile-time symbol prefix headers (LTO-safe) ---
+set(_zip_prefix_h "${ZIP_SOURCE_PATH}/zip_prefix.h")
+busyq_gen_prefix_header(zip "${_zip_prefix_h}")
+
+set(_unzip_prefix_h "${UNZIP_SOURCE_PATH}/unzip_prefix.h")
+busyq_gen_prefix_header(unzip "${_unzip_prefix_h}")
+
 set(ZIP_CC "${VCPKG_DETECTED_CMAKE_C_COMPILER}")
 set(ZIP_CFLAGS "${VCPKG_DETECTED_CMAKE_C_FLAGS} ${VCPKG_DETECTED_CMAKE_C_FLAGS_RELEASE}")
 
@@ -38,7 +46,7 @@ vcpkg_execute_required_process(
     COMMAND sh -c "
         set -e
         make -f unix/Makefile \
-            LOCAL_ZIP='${ZIP_CFLAGS}' \
+            LOCAL_ZIP='${ZIP_CFLAGS} -include ${_zip_prefix_h} -Dmain=zip_main' \
             prefix=/usr \
             generic \
             -j1
@@ -47,7 +55,7 @@ vcpkg_execute_required_process(
     LOGNAME "compile-zip-${TARGET_TRIPLET}"
 )
 
-# --- Symbol isolation for zip ---
+# --- Symbol isolation for zip (no objcopy — compile-time prefix preserves bitcode) ---
 set(ZIP_BUILD_DIR "${CURRENT_BUILDTREES_DIR}/${TARGET_TRIPLET}-rel-zip")
 file(MAKE_DIRECTORY "${ZIP_BUILD_DIR}")
 
@@ -63,20 +71,10 @@ vcpkg_execute_required_process(
             -z muldefs 2>/dev/null \
         || ld -r --whole-archive libzip_raw.a -o zip_combined.o
 
-        nm -u zip_combined.o | sed 's/.* //' | sort -u > undef_syms.txt
-
-        objcopy --prefix-symbols=zip_ zip_combined.o
-
-        sed 's/.*/zip_& &/' undef_syms.txt > redefine.map
-
-        echo 'zip_main zip_main' >> redefine.map
-
-        objcopy --redefine-syms=redefine.map zip_combined.o
-
         ar rcs '${CURRENT_PACKAGES_DIR}/lib/libzip.a' zip_combined.o
     "
     WORKING_DIRECTORY "${ZIP_BUILD_DIR}"
-    LOGNAME "symbol-isolate-zip-${TARGET_TRIPLET}"
+    LOGNAME "combine-zip-${TARGET_TRIPLET}"
 )
 
 # ============================================================
@@ -103,7 +101,7 @@ vcpkg_execute_required_process(
         set -e
         make -f unix/Makefile \
             LF2='' \
-            CF='${ZIP_CFLAGS} -I. ${UNZIP_DEFINES}' \
+            CF='${ZIP_CFLAGS} -I. ${UNZIP_DEFINES} -include ${_unzip_prefix_h} -Dmain=unzip_main' \
             prefix=/usr \
             unzips \
             -j1
@@ -112,7 +110,7 @@ vcpkg_execute_required_process(
     LOGNAME "compile-unzip-${TARGET_TRIPLET}"
 )
 
-# --- Symbol isolation for unzip ---
+# --- Symbol isolation for unzip (no objcopy — compile-time prefix preserves bitcode) ---
 set(UNZIP_BUILD_DIR "${CURRENT_BUILDTREES_DIR}/${TARGET_TRIPLET}-rel-unzip")
 file(MAKE_DIRECTORY "${UNZIP_BUILD_DIR}")
 
@@ -128,20 +126,10 @@ vcpkg_execute_required_process(
             -z muldefs 2>/dev/null \
         || ld -r --whole-archive libunzip_raw.a -o unzip_combined.o
 
-        nm -u unzip_combined.o | sed 's/.* //' | sort -u > undef_syms.txt
-
-        objcopy --prefix-symbols=unzip_ unzip_combined.o
-
-        sed 's/.*/unzip_& &/' undef_syms.txt > redefine.map
-
-        echo 'unzip_main unzip_main' >> redefine.map
-
-        objcopy --redefine-syms=redefine.map unzip_combined.o
-
         ar rcs '${CURRENT_PACKAGES_DIR}/lib/libunzip.a' unzip_combined.o
     "
     WORKING_DIRECTORY "${UNZIP_BUILD_DIR}"
-    LOGNAME "symbol-isolate-unzip-${TARGET_TRIPLET}"
+    LOGNAME "combine-unzip-${TARGET_TRIPLET}"
 )
 
 set(VCPKG_POLICY_MISMATCHED_NUMBER_OF_BINARIES enabled)

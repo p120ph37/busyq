@@ -1,4 +1,5 @@
 include("${CMAKE_CURRENT_LIST_DIR}/../../scripts/cmake/busyq_alpine_helpers.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/../../scripts/cmake/busyq_symbol_helpers.cmake")
 
 busyq_alpine_source(
     PORT_DIR "${CMAKE_CURRENT_LIST_DIR}"
@@ -12,6 +13,10 @@ busyq_alpine_source(
 vcpkg_cmake_get_vars(cmake_vars_file)
 include("${cmake_vars_file}")
 
+# --- Generate compile-time symbol prefix header (LTO-safe) ---
+set(_prefix_h "${SOURCE_PATH}/gawk_prefix.h")
+busyq_gen_prefix_header(gawk "${_prefix_h}")
+
 # Allow running configure as root inside containers
 set(ENV{FORCE_UNSAFE_CONFIGURE} "1")
 
@@ -24,7 +29,7 @@ vcpkg_configure_make(
         --disable-nls
 )
 
-vcpkg_build_make()
+vcpkg_build_make(OPTIONS "CPPFLAGS=-include ${_prefix_h} -Dmain=gawk_main")
 
 set(GAWK_BUILD_REL "${CURRENT_BUILDTREES_DIR}/${TARGET_TRIPLET}-rel")
 
@@ -35,56 +40,34 @@ file(MAKE_DIRECTORY "${CURRENT_PACKAGES_DIR}/lib")
 # Strategy: prefix all symbols with gawk_, then unprefix external deps.
 # After prefixing, main becomes gawk_main which IS the desired entry point.
 
-# Step 1: Collect all object files from the build
+
+# Collect all object files from the build
 file(GLOB_RECURSE GAWK_OBJS
     "${GAWK_BUILD_REL}/*.o"
 )
 list(FILTER GAWK_OBJS EXCLUDE REGEX "/(tests|test|extension|extras)/")
 
 if(NOT GAWK_OBJS)
-    message(FATAL_ERROR "No gawk object files found in ${GAWK_BUILD_REL}")
+    message(FATAL_ERROR "No object files found in ${GAWK_BUILD_REL}")
 endif()
 
-# Step 1a: Pack into temporary archive (needed for ld -r --whole-archive)
+# Pack into temporary archive (needed for ld -r --whole-archive)
 vcpkg_execute_required_process(
     COMMAND ar rcs "${GAWK_BUILD_REL}/libgawk_raw.a" ${GAWK_OBJS}
     WORKING_DIRECTORY "${GAWK_BUILD_REL}"
     LOGNAME "ar-raw-${TARGET_TRIPLET}"
 )
-
-# Steps 2-7: Combine, prefix, unprefix, rename — all in one script
+# Combine objects and package (no objcopy — compile-time prefix preserves bitcode)
 vcpkg_execute_required_process(
     COMMAND sh -c "
         set -e
-
-        # Step 2: Combine all objects into one relocatable .o
-        ld -r --whole-archive libgawk_raw.a -o gawk_combined.o \
+        ld -r --whole-archive libgawk_raw.a -o combined.o \
             -z muldefs 2>/dev/null \
-        || ld -r --whole-archive libgawk_raw.a -o gawk_combined.o
-
-        # Step 3: Record undefined symbols (external deps: libc, pthreads, etc.)
-        nm -u gawk_combined.o | sed 's/.* //' | sort -u > undef_syms.txt
-
-        # Step 4: Prefix all symbols with gawk_
-        objcopy --prefix-symbols=gawk_ gawk_combined.o
-
-        # Step 5: Generate redefine map to unprefix external deps
-        # After prefixing, 'malloc' became 'gawk_malloc' (undefined).
-        # Map it back: gawk_malloc → malloc
-        sed 's/.*/gawk_& &/' undef_syms.txt > redefine.map
-
-        # Step 6: Entry point — after prefixing, main became gawk_main
-        # which is already the desired entry point name. Add explicit
-        # mapping to be self-documenting (it's a no-op).
-        echo 'gawk_main gawk_main' >> redefine.map
-
-        objcopy --redefine-syms=redefine.map gawk_combined.o
-
-        # Step 7: Package into final archive
-        ar rcs '${CURRENT_PACKAGES_DIR}/lib/libgawk.a' gawk_combined.o
+        || ld -r --whole-archive libgawk_raw.a -o combined.o
+        ar rcs '${CURRENT_PACKAGES_DIR}/lib/libgawk.a' combined.o
     "
     WORKING_DIRECTORY "${GAWK_BUILD_REL}"
-    LOGNAME "symbol-isolate-${TARGET_TRIPLET}"
+    LOGNAME "combine-${TARGET_TRIPLET}"
 )
 
 # Suppress vcpkg post-build warnings — we only produce release libraries

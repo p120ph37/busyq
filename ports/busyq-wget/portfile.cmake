@@ -1,4 +1,5 @@
 include("${CMAKE_CURRENT_LIST_DIR}/../../scripts/cmake/busyq_alpine_helpers.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/../../scripts/cmake/busyq_symbol_helpers.cmake")
 
 busyq_alpine_source(
     PORT_DIR "${CMAKE_CURRENT_LIST_DIR}"
@@ -9,6 +10,10 @@ busyq_alpine_source(
 # claims the build directory.
 vcpkg_cmake_get_vars(cmake_vars_file)
 include("${cmake_vars_file}")
+
+# --- Generate compile-time symbol prefix header (LTO-safe) ---
+set(_prefix_h "${SOURCE_PATH}/wget_prefix.h")
+busyq_gen_prefix_header(wget "${_prefix_h}")
 
 set(WGET_CC "${VCPKG_DETECTED_CMAKE_C_COMPILER}")
 set(WGET_CFLAGS "${VCPKG_DETECTED_CMAKE_C_FLAGS} ${VCPKG_DETECTED_CMAKE_C_FLAGS_RELEASE}")
@@ -42,7 +47,7 @@ vcpkg_configure_make(
         --without-zlib
 )
 
-vcpkg_build_make()
+vcpkg_build_make(OPTIONS "CPPFLAGS=-include ${_prefix_h} -Dmain=wget_main")
 
 set(WGET_BUILD_REL "${CURRENT_BUILDTREES_DIR}/${TARGET_TRIPLET}-rel")
 
@@ -60,7 +65,8 @@ file(MAKE_DIRECTORY "${CURRENT_PACKAGES_DIR}/lib")
 # 6. Rename wget_main -> wget_main (dispatch entry point)
 # 7. Package into libwget.a
 
-# Step 1: Collect all object files from the build
+
+# Collect all object files from the build
 file(GLOB_RECURSE WGET_OBJS
     "${WGET_BUILD_REL}/src/*.o"
     "${WGET_BUILD_REL}/lib/*.o"
@@ -68,45 +74,26 @@ file(GLOB_RECURSE WGET_OBJS
 list(FILTER WGET_OBJS EXCLUDE REGEX "/(tests|testenv|fuzz)/")
 
 if(NOT WGET_OBJS)
-    message(FATAL_ERROR "No wget object files found in ${WGET_BUILD_REL}")
+    message(FATAL_ERROR "No object files found in ${WGET_BUILD_REL}")
 endif()
 
-# Step 1a: Pack into temporary archive (needed for ld -r --whole-archive)
+# Pack into temporary archive (needed for ld -r --whole-archive)
 vcpkg_execute_required_process(
     COMMAND ar rcs "${WGET_BUILD_REL}/libwget_raw.a" ${WGET_OBJS}
     WORKING_DIRECTORY "${WGET_BUILD_REL}"
     LOGNAME "ar-raw-${TARGET_TRIPLET}"
 )
-
-# Steps 2-7: Combine, prefix, unprefix, rename -- all in one script
+# Combine objects and package (no objcopy — compile-time prefix preserves bitcode)
 vcpkg_execute_required_process(
     COMMAND sh -c "
         set -e
-
-        # Step 2: Combine all objects into one relocatable .o
-        ld -r --whole-archive libwget_raw.a -o wget_combined.o \
+        ld -r --whole-archive libwget_raw.a -o combined.o \
             -z muldefs 2>/dev/null \
-        || ld -r --whole-archive libwget_raw.a -o wget_combined.o
-
-        # Step 3: Record undefined symbols (external deps: libc, pthreads, etc.)
-        nm -u wget_combined.o | sed 's/.* //' | sort -u > undef_syms.txt
-
-        # Step 4: Prefix all symbols with wget_
-        objcopy --prefix-symbols=wget_ wget_combined.o
-
-        # Step 5: Generate redefine map to unprefix external deps
-        sed 's/.*/wget_& &/' undef_syms.txt > redefine.map
-
-        # Step 6: Rename wget_main -> wget_main (entry point)
-        echo 'wget_main wget_main' >> redefine.map
-
-        objcopy --redefine-syms=redefine.map wget_combined.o
-
-        # Step 7: Package into final archive
-        ar rcs '${CURRENT_PACKAGES_DIR}/lib/libwget.a' wget_combined.o
+        || ld -r --whole-archive libwget_raw.a -o combined.o
+        ar rcs '${CURRENT_PACKAGES_DIR}/lib/libwget.a' combined.o
     "
     WORKING_DIRECTORY "${WGET_BUILD_REL}"
-    LOGNAME "symbol-isolate-${TARGET_TRIPLET}"
+    LOGNAME "combine-${TARGET_TRIPLET}"
 )
 
 # Suppress vcpkg post-build warnings -- we only produce release libraries

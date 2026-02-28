@@ -1,4 +1,5 @@
 include("${CMAKE_CURRENT_LIST_DIR}/../../scripts/cmake/busyq_alpine_helpers.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/../../scripts/cmake/busyq_symbol_helpers.cmake")
 
 busyq_alpine_source(
     PORT_DIR "${CMAKE_CURRENT_LIST_DIR}"
@@ -11,6 +12,10 @@ busyq_alpine_source(
 vcpkg_cmake_get_vars(cmake_vars_file)
 include("${cmake_vars_file}")
 
+# --- Generate compile-time symbol prefix header (LTO-safe) ---
+set(_prefix_h "${SOURCE_PATH}/fu_prefix.h")
+busyq_gen_prefix_header(fu "${_prefix_h}")
+
 # Allow running configure as root inside containers
 set(ENV{FORCE_UNSAFE_CONFIGURE} "1")
 
@@ -20,7 +25,7 @@ vcpkg_configure_make(
         --disable-nls
 )
 
-vcpkg_build_make()
+vcpkg_build_make(OPTIONS "CPPFLAGS=-include ${_prefix_h}")
 
 set(FU_BUILD_REL "${CURRENT_BUILDTREES_DIR}/${TARGET_TRIPLET}-rel")
 
@@ -48,76 +53,45 @@ if(NOT FU_OBJS)
     message(FATAL_ERROR "No findutils object files found in ${FU_BUILD_REL}")
 endif()
 
-# Step 1a: Rename main in each tool's object file to avoid collisions
-# when combining them with ld -r.
-# find's main may be in find/ftsfind.o or find/find.o depending on version.
-# xargs's main is in xargs/xargs.o.
-# Note: shell variables ($obj) must use \$ to avoid cmake expansion.
-vcpkg_execute_required_process(
-    COMMAND sh -c "
-        set -e
-        # find's main is in find/ftsfind.o or find/find.o
-        for obj in '${FU_BUILD_REL}/find/ftsfind.o' '${FU_BUILD_REL}/find/find.o'
-do
-            if [ -f \"\$obj\" ] && nm \"\$obj\" 2>/dev/null | grep -q ' T main\$'
-then
-                objcopy --redefine-sym main=find_main_orig \"\$obj\"
-                break
-            fi
-        done
-        # xargs's main is in xargs/xargs.o
-        obj='${FU_BUILD_REL}/xargs/xargs.o'
-        if [ -f \"\$obj\" ]
-then
-            objcopy --redefine-sym main=xargs_main_orig \"\$obj\"
-        fi
-    "
-    WORKING_DIRECTORY "${FU_BUILD_REL}"
-    LOGNAME "rename-mains-${TARGET_TRIPLET}"
-)
-
-# Step 1b: Pack into temporary archive (needed for ld -r --whole-archive)
+# Step 1a: Pack objects into raw archive
 vcpkg_execute_required_process(
     COMMAND ar rcs "${FU_BUILD_REL}/libfindutils_raw.a" ${FU_OBJS}
     WORKING_DIRECTORY "${FU_BUILD_REL}"
     LOGNAME "ar-raw-${TARGET_TRIPLET}"
 )
 
-# Steps 2-7: Combine, prefix, unprefix, rename — all in one script
+# Rename mains and combine (no --prefix-symbols — compile-time prefix preserves bitcode)
 vcpkg_execute_required_process(
     COMMAND sh -c "
         set -e
 
-        # Step 2: Combine all objects into one relocatable .o
-        ld -r --whole-archive libfindutils_raw.a -o findutils_combined.o \
+        # Rename main in each tool's object file
+        for f in find/ftsfind.o find/find.o; do
+            if [ -f \"\$f\" ] && nm \"\$f\" 2>/dev/null | grep -q ' T main$'; then
+                objcopy --redefine-sym main=find_main \"\$f\"
+                break
+            fi
+        done
+        for f in xargs/xargs.o; do
+            if [ -f \"\$f\" ] && nm \"\$f\" 2>/dev/null | grep -q ' T main$'; then
+                objcopy --redefine-sym main=xargs_main \"\$f\"
+                break
+            fi
+        done
+
+        # Rebuild archive with renamed mains
+        find find xargs lib gl -name '*.o' ! -path '*/tests/*' ! -path '*/gnulib-tests/*' 2>/dev/null | xargs ar rcs libfindutils_raw.a
+
+        # Combine all objects into one relocatable .o
+        ld -r --whole-archive libfindutils_raw.a -o combined.o \
             -z muldefs 2>/dev/null \
-        || ld -r --whole-archive libfindutils_raw.a -o findutils_combined.o
+        || ld -r --whole-archive libfindutils_raw.a -o combined.o
 
-        # Step 3: Record undefined symbols (external deps: libc, pthreads, etc.)
-        nm -u findutils_combined.o | sed 's/.* //' | sort -u > undef_syms.txt
-
-        # Step 4: Prefix all symbols with fu_
-        objcopy --prefix-symbols=fu_ findutils_combined.o
-
-        # Step 5: Generate redefine map to unprefix external deps
-        # After prefixing, 'malloc' became 'fu_malloc' (undefined).
-        # Map it back: fu_malloc → malloc
-        sed 's/.*/fu_& &/' undef_syms.txt > redefine.map
-
-        # Step 6: Rename prefixed tool mains to final entry points
-        # Before prefix: find_main_orig, xargs_main_orig
-        # After prefix:  fu_find_main_orig, fu_xargs_main_orig
-        # Final rename:  find_main, xargs_main
-        echo 'fu_find_main_orig find_main' >> redefine.map
-        echo 'fu_xargs_main_orig xargs_main' >> redefine.map
-
-        objcopy --redefine-syms=redefine.map findutils_combined.o
-
-        # Step 7: Package into final archive
-        ar rcs '${CURRENT_PACKAGES_DIR}/lib/libfindutils.a' findutils_combined.o
+        # Package into final archive
+        ar rcs '${CURRENT_PACKAGES_DIR}/lib/libfindutils.a' combined.o
     "
     WORKING_DIRECTORY "${FU_BUILD_REL}"
-    LOGNAME "symbol-isolate-${TARGET_TRIPLET}"
+    LOGNAME "combine-${TARGET_TRIPLET}"
 )
 
 # Suppress vcpkg post-build warnings — we only produce release libraries

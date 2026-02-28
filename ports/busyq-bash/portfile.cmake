@@ -34,7 +34,7 @@ file(COPY
 file(RENAME "${SOURCE_PATH}/applet_table.h" "${SOURCE_PATH}/busyq_applet_table.h")
 
 # Provide a stub for busyq_find_applet so bash can link during its build.
-# The real implementation comes from applet_table.c at final link time.
+# The real implementation comes from applets.c at final link time.
 file(WRITE "${SOURCE_PATH}/busyq_stub.c" [=[
 #include "busyq_applet_table.h"
 const struct busyq_applet *busyq_find_applet(const char *name) { (void)name; return 0; }
@@ -122,6 +122,24 @@ foreach(RLIB IN ITEMS "libreadline.a" "libhistory.a")
         )
     endif()
 endforeach()
+
+# --- Build the busyq-scan AST walker ---
+# This must be compiled here (not in the top-level CMakeLists.txt) because
+# it needs bash's internal headers (command.h, shell.h, flags.h, etc.)
+# which are only available inside the bash source/build tree.
+set(_scan_walk_src "${CURRENT_PORT_DIR}/../../src/busyq_scan_walk.c")
+if(EXISTS "${_scan_walk_src}")
+    vcpkg_execute_required_process(
+        COMMAND sh -c "cc -DHAVE_CONFIG_H -DSHELL -I'${BASH_BUILD_DIR}' -I'${SOURCE_PATH}' -I'${SOURCE_PATH}/include' -I'${SOURCE_PATH}/builtins' ${EXTRA_CFLAGS} -c '${_scan_walk_src}' -o '${BASH_BUILD_DIR}/busyq_scan_walk.o'"
+        WORKING_DIRECTORY "${BASH_BUILD_DIR}"
+        LOGNAME "compile-busyq-scan-walk-${TARGET_TRIPLET}"
+    )
+    vcpkg_execute_required_process(
+        COMMAND ar rcs "${CURRENT_PACKAGES_DIR}/lib/libbusyq_scan.a" "${BASH_BUILD_DIR}/busyq_scan_walk.o"
+        WORKING_DIRECTORY "${BASH_BUILD_DIR}"
+        LOGNAME "ar-libbusyq-scan-${TARGET_TRIPLET}"
+    )
+endif()
 
 # Install key headers
 file(INSTALL

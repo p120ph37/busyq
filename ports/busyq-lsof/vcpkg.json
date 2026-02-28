@@ -4,6 +4,7 @@
   "description": "lsof built as a static library for busyq (lsof)",
   "license": "Zlib",
   "dependencies": [
+    "busyq-bash",
     {
       "name": "vcpkg-cmake-get-vars",
       "host": true

@@ -1,4 +1,5 @@
 include("${CMAKE_CURRENT_LIST_DIR}/../../scripts/cmake/busyq_alpine_helpers.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/../../scripts/cmake/busyq_symbol_helpers.cmake")
 
 busyq_alpine_source(
     PORT_DIR "${CMAKE_CURRENT_LIST_DIR}"
@@ -9,6 +10,10 @@ busyq_alpine_source(
 # claims the build directory.
 vcpkg_cmake_get_vars(cmake_vars_file)
 include("${cmake_vars_file}")
+
+# --- Generate compile-time symbol prefix header (LTO-safe) ---
+set(_prefix_h "${SOURCE_PATH}/ed_prefix.h")
+busyq_gen_prefix_header(ed "${_prefix_h}")
 
 set(ED_CC "${VCPKG_DETECTED_CMAKE_C_COMPILER}")
 set(ED_CFLAGS "${VCPKG_DETECTED_CMAKE_C_FLAGS} ${VCPKG_DETECTED_CMAKE_C_FLAGS_RELEASE}")
@@ -35,19 +40,16 @@ vcpkg_execute_required_process(
     LOGNAME "configure-${TARGET_TRIPLET}"
 )
 
+# Build with compile-time prefix header and main rename
 vcpkg_execute_required_process(
-    COMMAND make -j${VCPKG_CONCURRENCY}
+    COMMAND make -j${VCPKG_CONCURRENCY} "CPPFLAGS=-include ${_prefix_h} -Dmain=ed_main"
     WORKING_DIRECTORY "${ED_BUILD_REL}"
     LOGNAME "build-${TARGET_TRIPLET}"
 )
 
 file(MAKE_DIRECTORY "${CURRENT_PACKAGES_DIR}/lib")
 
-# --- Symbol isolation ---
-# ed is a standalone tool but may have symbol collisions with other packages.
-# Strategy: prefix all symbols with ed_, then unprefix external deps.
-# After prefixing, main becomes ed_main which IS the desired entry point.
-
+# --- Symbol isolation (no objcopy — compile-time prefix preserves bitcode) ---
 # Step 1: Collect all object files from the build
 file(GLOB ED_OBJS
     "${ED_BUILD_REL}/*.o"
@@ -64,39 +66,21 @@ vcpkg_execute_required_process(
     LOGNAME "ar-raw-${TARGET_TRIPLET}"
 )
 
-# Steps 2-7: Combine, prefix, unprefix, rename — all in one script
+# Combine into relocatable object and package
 vcpkg_execute_required_process(
     COMMAND sh -c "
         set -e
 
-        # Step 2: Combine all objects into one relocatable .o
+        # Combine all objects into one relocatable .o
         ld -r --whole-archive libed_raw.a -o ed_combined.o \
             -z muldefs 2>/dev/null \
         || ld -r --whole-archive libed_raw.a -o ed_combined.o
 
-        # Step 3: Record undefined symbols (external deps: libc, etc.)
-        nm -u ed_combined.o | sed 's/.* //' | sort -u > undef_syms.txt
-
-        # Step 4: Prefix all symbols with ed_
-        objcopy --prefix-symbols=ed_ ed_combined.o
-
-        # Step 5: Generate redefine map to unprefix external deps
-        # After prefixing, 'malloc' became 'ed_malloc' (undefined).
-        # Map it back: ed_malloc → malloc
-        sed 's/.*/ed_& &/' undef_syms.txt > redefine.map
-
-        # Step 6: Entry point — after prefixing, main became ed_main
-        # which is already the desired entry point name. Add explicit
-        # mapping to be self-documenting (it's a no-op).
-        echo 'ed_main ed_main' >> redefine.map
-
-        objcopy --redefine-syms=redefine.map ed_combined.o
-
-        # Step 7: Package into final archive
+        # Package into final archive
         ar rcs '${CURRENT_PACKAGES_DIR}/lib/libed.a' ed_combined.o
     "
     WORKING_DIRECTORY "${ED_BUILD_REL}"
-    LOGNAME "symbol-isolate-${TARGET_TRIPLET}"
+    LOGNAME "combine-${TARGET_TRIPLET}"
 )
 
 # Suppress vcpkg post-build warnings — we only produce release libraries

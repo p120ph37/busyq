@@ -10,6 +10,7 @@
 # These patches touch .m4 files, so autoreconf is required after patching.
 
 include("${CMAKE_CURRENT_LIST_DIR}/../../scripts/cmake/busyq_alpine_helpers.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/../../scripts/cmake/busyq_symbol_helpers.cmake")
 
 busyq_alpine_source(
     PORT_DIR "${CMAKE_CURRENT_LIST_DIR}"
@@ -34,6 +35,10 @@ endforeach()
 vcpkg_cmake_get_vars(cmake_vars_file)
 include("${cmake_vars_file}")
 
+# --- Generate compile-time symbol prefix header (LTO-safe) ---
+set(_prefix_h "${SOURCE_PATH}/shar_prefix.h")
+busyq_gen_prefix_header(shar "${_prefix_h}")
+
 set(ENV{FORCE_UNSAFE_CONFIGURE} "1")
 
 # Alpine patches touch .m4 files; regenerate configure
@@ -50,7 +55,7 @@ vcpkg_configure_make(
         --disable-dependency-tracking
 )
 
-vcpkg_build_make()
+vcpkg_build_make(OPTIONS "CPPFLAGS=-include ${_prefix_h}")
 
 set(SHAR_BUILD_REL "${CURRENT_BUILDTREES_DIR}/${TARGET_TRIPLET}-rel")
 
@@ -75,43 +80,32 @@ vcpkg_execute_required_process(
     LOGNAME "ar-raw-${TARGET_TRIPLET}"
 )
 
+# Rename mains and combine (no --prefix-symbols — compile-time prefix preserves bitcode)
 vcpkg_execute_required_process(
     COMMAND sh -c "
         set -e
 
-        # Rename main in uuencode.o and uudecode.o before combining
-        if [ -f src/uuencode.o ]
-then
-            objcopy --redefine-sym main=uuencode_main_orig src/uuencode.o
-        fi
-        if [ -f src/uudecode.o ]
-then
-            objcopy --redefine-sym main=uudecode_main_orig src/uudecode.o
-        fi
+        # Rename main in each tool's object file
+        for tool in shar unshar uuencode uudecode; do
+            obj=\"src/\${tool}.o\"
+            if [ -f \"\$obj\" ] && nm \"\$obj\" 2>/dev/null | grep -q ' T main$'; then
+                objcopy --redefine-sym main=\"\${tool}_main\" \"\$obj\"
+            fi
+        done
 
-        # Rebuild raw archive with renamed mains
+        # Rebuild archive with renamed mains
         find src lib libopts -name '*.o' 2>/dev/null | xargs ar rcs libshar_raw.a
 
-        # Combine into one relocatable object
-        ld -r --whole-archive libshar_raw.a -o shar_combined.o \
+        # Combine all objects into one relocatable .o
+        ld -r --whole-archive libshar_raw.a -o combined.o \
             -z muldefs 2>/dev/null \
-        || ld -r --whole-archive libshar_raw.a -o shar_combined.o
+        || ld -r --whole-archive libshar_raw.a -o combined.o
 
-        nm -u shar_combined.o | sed 's/.* //' | sort -u > undef_syms.txt
-
-        objcopy --prefix-symbols=shar_ shar_combined.o
-
-        sed 's/.*/shar_& &/' undef_syms.txt > redefine.map
-
-        echo 'shar_uuencode_main_orig uuencode_main' >> redefine.map
-        echo 'shar_uudecode_main_orig uudecode_main' >> redefine.map
-
-        objcopy --redefine-syms=redefine.map shar_combined.o
-
-        ar rcs '${CURRENT_PACKAGES_DIR}/lib/libsharutils.a' shar_combined.o
+        # Package into final archive
+        ar rcs '${CURRENT_PACKAGES_DIR}/lib/libsharutils.a' combined.o
     "
     WORKING_DIRECTORY "${SHAR_BUILD_REL}"
-    LOGNAME "symbol-isolate-${TARGET_TRIPLET}"
+    LOGNAME "combine-${TARGET_TRIPLET}"
 )
 
 set(VCPKG_POLICY_MISMATCHED_NUMBER_OF_BINARIES enabled)

@@ -4,6 +4,7 @@
   "description": "GNU cpio built as a static library for busyq",
   "license": "GPL-3.0-or-later",
   "dependencies": [
+    "busyq-bash",
     {
       "name": "vcpkg-cmake-get-vars",
       "host": true

@@ -6,6 +6,7 @@
 # Version: 4.0.5 (synced from Alpine 3.23-stable)
 
 include("${CMAKE_CURRENT_LIST_DIR}/../../scripts/cmake/busyq_alpine_helpers.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/../../scripts/cmake/busyq_symbol_helpers.cmake")
 
 busyq_alpine_source(
     PORT_DIR "${CMAKE_CURRENT_LIST_DIR}"
@@ -15,6 +16,10 @@ busyq_alpine_source(
 # Detect toolchain flags before autotools claims the build directory
 vcpkg_cmake_get_vars(cmake_vars_file)
 include("${cmake_vars_file}")
+
+# --- Generate compile-time symbol prefix header (LTO-safe) ---
+set(_prefix_h "${SOURCE_PATH}/procps_prefix.h")
+busyq_gen_prefix_header(procps "${_prefix_h}")
 
 set(ENV{FORCE_UNSAFE_CONFIGURE} "1")
 
@@ -37,7 +42,7 @@ vcpkg_configure_make(
         --enable-watch
 )
 
-vcpkg_build_make()
+vcpkg_build_make(OPTIONS "CPPFLAGS=-include ${_prefix_h}")
 
 set(PROCPS_BUILD_REL "${CURRENT_BUILDTREES_DIR}/${TARGET_TRIPLET}-rel")
 
@@ -74,58 +79,38 @@ vcpkg_execute_required_process(
     LOGNAME "ar-raw-${TARGET_TRIPLET}"
 )
 
+# Rename mains and combine (no --prefix-symbols — compile-time prefix preserves bitcode)
 vcpkg_execute_required_process(
     COMMAND sh -c "
         set -e
 
-        for obj in src/*.o src/*/*.o
-do
-            [ -f \"\$obj\" ] || continue
-            if nm \"\$obj\" 2>/dev/null | grep -q ' T main$'
-then
-                bn=\$(basename \"\$obj\" .o)
-                objcopy --redefine-sym main=\${bn}_main_orig \"\$obj\"
+        # Rename main in each tool's object file dynamically
+        for obj in \$(find src/ -name '*.o' ! -path '*/tests/*' ! -path '*/testsuite/*' 2>/dev/null); do
+            if nm \"\$obj\" 2>/dev/null | grep -q ' T main$'; then
+                tool=\$(basename \"\$obj\" .o)
+                objcopy --redefine-sym main=\"\${tool}_main\" \"\$obj\"
             fi
         done
 
         find src/ library/ local/ lib/ -name '*.o' ! -path '*/tests/*' ! -path '*/testsuite/*' 2>/dev/null | sort > obj_list.txt
         ar rcs libprocps_raw.a \$(cat obj_list.txt) 2>/dev/null || true
 
-        ld -r --whole-archive libprocps_raw.a -o procps_combined.o \
+        # Combine all objects into one relocatable .o
+        ld -r --whole-archive libprocps_raw.a -o combined.o \
             -z muldefs 2>/dev/null \
-        || ld -r --whole-archive libprocps_raw.a -o procps_combined.o
+        || ld -r --whole-archive libprocps_raw.a -o combined.o
 
-        nm -u procps_combined.o | sed 's/.* //' | sort -u > undef_syms.txt
+        # Fix known entry point mismatches (file basename != tool name)
+        # ps: main() is in src/ps/display.c, not src/ps/ps.c
+        if nm combined.o 2>/dev/null | grep -q ' T display_main'; then
+            objcopy --redefine-sym display_main=ps_main combined.o
+        fi
 
-        objcopy --prefix-symbols=procps_ procps_combined.o
-
-        sed 's/.*/procps_& &/' undef_syms.txt > redefine.map
-
-        # Explicit tool name mapping (basename → applet name)
-        # Some procps binaries have hyphenated names (top-top, watch-watch)
-        # or differ from the applet name (display → ps, pgrep → also pkill)
-        echo 'procps_display_main_orig ps_main' >> redefine.map
-        echo 'procps_free_main_orig free_main' >> redefine.map
-        echo 'procps_top-top_main_orig top_main' >> redefine.map
-        echo 'procps_pgrep_main_orig pgrep_main' >> redefine.map
-        echo 'procps_pidof_main_orig pidof_main' >> redefine.map
-        echo 'procps_pmap_main_orig pmap_main' >> redefine.map
-        echo 'procps_pwdx_main_orig pwdx_main' >> redefine.map
-        echo 'procps_watch-watch_main_orig watch_main' >> redefine.map
-        echo 'procps_sysctl_main_orig sysctl_main' >> redefine.map
-        echo 'procps_vmstat_main_orig vmstat_main' >> redefine.map
-        echo 'procps_uptime_main_orig uptime_main' >> redefine.map
-        echo 'procps_w_main_orig w_main' >> redefine.map
-        echo 'procps_tload_main_orig tload_main' >> redefine.map
-        echo 'procps_slabtop-slabtop_main_orig slabtop_main' >> redefine.map
-        echo 'procps_hugetop-hugetop_main_orig hugetop_main' >> redefine.map
-
-        objcopy --redefine-syms=redefine.map procps_combined.o
-
-        ar rcs '${CURRENT_PACKAGES_DIR}/lib/libprocps.a' procps_combined.o
+        # Package into final archive
+        ar rcs '${CURRENT_PACKAGES_DIR}/lib/libprocps.a' combined.o
     "
     WORKING_DIRECTORY "${PROCPS_BUILD_REL}"
-    LOGNAME "symbol-isolate-${TARGET_TRIPLET}"
+    LOGNAME "combine-${TARGET_TRIPLET}"
 )
 
 set(VCPKG_POLICY_MISMATCHED_NUMBER_OF_BINARIES enabled)

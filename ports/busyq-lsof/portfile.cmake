@@ -1,4 +1,5 @@
 include("${CMAKE_CURRENT_LIST_DIR}/../../scripts/cmake/busyq_alpine_helpers.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/../../scripts/cmake/busyq_symbol_helpers.cmake")
 
 busyq_alpine_source(
     PORT_DIR "${CMAKE_CURRENT_LIST_DIR}"
@@ -10,6 +11,10 @@ busyq_alpine_source(
 # claims the build directory.
 vcpkg_cmake_get_vars(cmake_vars_file)
 include("${cmake_vars_file}")
+
+# --- Generate compile-time symbol prefix header (LTO-safe) ---
+set(_prefix_h "${SOURCE_PATH}/lsof_prefix.h")
+busyq_gen_prefix_header(lsof "${_prefix_h}")
 
 set(LSOF_CC "${VCPKG_DETECTED_CMAKE_C_COMPILER}")
 set(LSOF_CFLAGS "${VCPKG_DETECTED_CMAKE_C_FLAGS} ${VCPKG_DETECTED_CMAKE_C_FLAGS_RELEASE}")
@@ -27,7 +32,7 @@ vcpkg_configure_make(
 
 # lsof 4.99.5 builds man pages requiring soelim (groff). Build only the
 # binary and library targets we need, skipping documentation.
-vcpkg_build_make(BUILD_TARGET lsof)
+vcpkg_build_make(BUILD_TARGET lsof OPTIONS "CPPFLAGS=-include ${_prefix_h} -Dmain=lsof_main")
 
 set(LSOF_BUILD_REL "${CURRENT_BUILDTREES_DIR}/${TARGET_TRIPLET}-rel")
 
@@ -44,7 +49,8 @@ file(MAKE_DIRECTORY "${CURRENT_PACKAGES_DIR}/lib")
 # 6. Rename lsof_main → lsof_main (our entry point)
 # 7. Package into liblsof.a
 
-# Step 1: Collect all object files from the build
+
+# Collect all object files from the build
 file(GLOB_RECURSE LSOF_OBJS
     "${LSOF_BUILD_REL}/src/*.o"
     "${LSOF_BUILD_REL}/lib/*.o"
@@ -52,50 +58,26 @@ file(GLOB_RECURSE LSOF_OBJS
 list(FILTER LSOF_OBJS EXCLUDE REGEX "/(tests|testsuite|man|doc)/")
 
 if(NOT LSOF_OBJS)
-    message(FATAL_ERROR "No lsof object files found in ${LSOF_BUILD_REL}")
+    message(FATAL_ERROR "No object files found in ${LSOF_BUILD_REL}")
 endif()
 
-# Step 1a: Pack into temporary archive (needed for ld -r --whole-archive)
+# Pack into temporary archive (needed for ld -r --whole-archive)
 vcpkg_execute_required_process(
     COMMAND ar rcs "${LSOF_BUILD_REL}/liblsof_raw.a" ${LSOF_OBJS}
     WORKING_DIRECTORY "${LSOF_BUILD_REL}"
     LOGNAME "ar-raw-${TARGET_TRIPLET}"
 )
-
-# Steps 2-7: Combine, prefix, unprefix, rename — all in one script
+# Combine objects and package (no objcopy — compile-time prefix preserves bitcode)
 vcpkg_execute_required_process(
     COMMAND sh -c "
         set -e
-
-        # Step 2: Combine all objects into one relocatable .o
-        ld -r --whole-archive liblsof_raw.a -o lsof_combined.o \
+        ld -r --whole-archive liblsof_raw.a -o combined.o \
             -z muldefs 2>/dev/null \
-        || ld -r --whole-archive liblsof_raw.a -o lsof_combined.o
-
-        # Step 3: Record undefined symbols (external deps: libc, etc.)
-        nm -u lsof_combined.o | sed 's/.* //' | sort -u > undef_syms.txt
-
-        # Step 4: Prefix all symbols with lsof_
-        objcopy --prefix-symbols=lsof_ lsof_combined.o
-
-        # Step 5: Generate redefine map to unprefix external deps
-        # After prefixing, 'malloc' became 'lsof_malloc' (undefined).
-        # Map it back: lsof_malloc -> malloc
-        sed 's/.*/lsof_& &/' undef_syms.txt > redefine.map
-
-        # Step 6: Rename lsof_main -> lsof_main (entry point)
-        # After prefix-symbols, the original 'main' became 'lsof_main'.
-        # That is already the name we want, so no additional rename needed.
-        # But we must ensure it is NOT un-prefixed if 'main' appears in
-        # undef_syms.txt (it should not, since main is defined, not undefined).
-
-        objcopy --redefine-syms=redefine.map lsof_combined.o
-
-        # Step 7: Package into final archive
-        ar rcs '${CURRENT_PACKAGES_DIR}/lib/liblsof.a' lsof_combined.o
+        || ld -r --whole-archive liblsof_raw.a -o combined.o
+        ar rcs '${CURRENT_PACKAGES_DIR}/lib/liblsof.a' combined.o
     "
     WORKING_DIRECTORY "${LSOF_BUILD_REL}"
-    LOGNAME "symbol-isolate-${TARGET_TRIPLET}"
+    LOGNAME "combine-${TARGET_TRIPLET}"
 )
 
 # Suppress vcpkg post-build warnings — we only produce release libraries

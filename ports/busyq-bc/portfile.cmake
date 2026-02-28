@@ -3,6 +3,7 @@
 # Version: 1.08.2 (synced from Alpine 3.23-stable, zero patches)
 
 include("${CMAKE_CURRENT_LIST_DIR}/../../scripts/cmake/busyq_alpine_helpers.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/../../scripts/cmake/busyq_symbol_helpers.cmake")
 
 busyq_alpine_source(
     PORT_DIR "${CMAKE_CURRENT_LIST_DIR}"
@@ -12,6 +13,10 @@ busyq_alpine_source(
 # Detect toolchain flags
 vcpkg_cmake_get_vars(cmake_vars_file)
 include("${cmake_vars_file}")
+
+# --- Generate compile-time symbol prefix header (LTO-safe) ---
+set(_prefix_h "${SOURCE_PATH}/bc_prefix.h")
+busyq_gen_prefix_header(bc "${_prefix_h}")
 
 set(BC_CC "${VCPKG_DETECTED_CMAKE_C_COMPILER}")
 set(BC_CFLAGS "${VCPKG_DETECTED_CMAKE_C_FLAGS} ${VCPKG_DETECTED_CMAKE_C_FLAGS_RELEASE}")
@@ -25,7 +30,7 @@ vcpkg_configure_make(
         --with-readline=no
 )
 
-vcpkg_build_make()
+vcpkg_build_make(OPTIONS "CPPFLAGS=-include ${_prefix_h}")
 
 set(BC_BUILD_REL "${CURRENT_BUILDTREES_DIR}/${TARGET_TRIPLET}-rel")
 
@@ -53,54 +58,40 @@ vcpkg_execute_required_process(
     LOGNAME "ar-raw-${TARGET_TRIPLET}"
 )
 
-# Steps 2-7: Rename mains, combine, prefix, unprefix, rename entries
+# Rename mains in bc and dc objects, combine, and package
+# Uses objcopy --redefine-sym (single symbol rename, safe with bitcode)
+# NOT objcopy --prefix-symbols (which destroys bitcode)
 vcpkg_execute_required_process(
     COMMAND sh -c "
         set -e
 
-        # Rename main in bc and dc objects before combining.
-        # bc 1.08.2 puts main in bc/main.o and dc/dc.o (not dc/main.o).
+        # Rename main in bc and dc objects
         for f in bc/main.o bc/bc.o; do
-            if [ -f \"\$f\" ] && nm \"\$f\" | grep -q ' T main$'; then
-                objcopy --redefine-sym main=bc_main_orig \"\$f\"
+            if [ -f \"\$f\" ] && nm \"\$f\" 2>/dev/null | grep -q ' T main$'; then
+                objcopy --redefine-sym main=bc_main \"\$f\"
                 break
             fi
         done
         for f in dc/main.o dc/dc.o; do
-            if [ -f \"\$f\" ] && nm \"\$f\" | grep -q ' T main$'; then
-                objcopy --redefine-sym main=dc_main_orig \"\$f\"
+            if [ -f \"\$f\" ] && nm \"\$f\" 2>/dev/null | grep -q ' T main$'; then
+                objcopy --redefine-sym main=dc_main \"\$f\"
                 break
             fi
         done
 
-        # Rebuild raw archive with renamed mains
+        # Rebuild archive with renamed mains
         find bc dc lib -name '*.o' 2>/dev/null | xargs ar rcs libbc_raw.a
 
-        # Combine into one relocatable object
-        ld -r --whole-archive libbc_raw.a -o bc_combined.o \
+        # Combine all objects into one relocatable .o
+        ld -r --whole-archive libbc_raw.a -o combined.o \
             -z muldefs 2>/dev/null \
-        || ld -r --whole-archive libbc_raw.a -o bc_combined.o
-
-        # Record undefined symbols
-        nm -u bc_combined.o | sed 's/.* //' | sort -u > undef_syms.txt
-
-        # Prefix all symbols with bc_
-        objcopy --prefix-symbols=bc_ bc_combined.o
-
-        # Generate redefine map to unprefix external deps
-        sed 's/.*/bc_& &/' undef_syms.txt > redefine.map
-
-        # Map entry points: bc_bc_main_orig -> bc_main, bc_dc_main_orig -> dc_main
-        echo 'bc_bc_main_orig bc_main' >> redefine.map
-        echo 'bc_dc_main_orig dc_main' >> redefine.map
-
-        objcopy --redefine-syms=redefine.map bc_combined.o
+        || ld -r --whole-archive libbc_raw.a -o combined.o
 
         # Package into final archive
-        ar rcs '${CURRENT_PACKAGES_DIR}/lib/libbc.a' bc_combined.o
+        ar rcs '${CURRENT_PACKAGES_DIR}/lib/libbc.a' combined.o
     "
     WORKING_DIRECTORY "${BC_BUILD_REL}"
-    LOGNAME "symbol-isolate-${TARGET_TRIPLET}"
+    LOGNAME "combine-${TARGET_TRIPLET}"
 )
 
 set(VCPKG_POLICY_MISMATCHED_NUMBER_OF_BINARIES enabled)

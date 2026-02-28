@@ -165,7 +165,9 @@ dev-build() {
     echo "dev-container: configuring + building busyq (no SSL)..."
     dev-exec 'cmake --preset no-ssl && cmake --build --preset no-ssl'
 
-    echo "dev-container: build complete. Binary at build/no-ssl/busyq"
+    echo "dev-container: build complete."
+    echo "  Binary:  build/no-ssl/busyq"
+    echo "  Library: build/no-ssl/libbusyq.a"
 }
 
 # ── Stop and remove the container ────────────────────────────────────────
