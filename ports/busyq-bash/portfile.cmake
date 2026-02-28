@@ -84,6 +84,8 @@ file(GLOB BASH_OBJS "${BASH_BUILD_DIR}/*.o")
 list(FILTER BASH_OBJS EXCLUDE REGEX "busyq_stub\\.o$")
 list(FILTER BASH_OBJS EXCLUDE REGEX "mksignames\\.o$")
 list(FILTER BASH_OBJS EXCLUDE REGEX "mksyntax\\.o$")
+list(FILTER BASH_OBJS EXCLUDE REGEX "buildsignames\\.o$")
+list(FILTER BASH_OBJS EXCLUDE REGEX "buildversion\\.o$")
 
 if(BASH_OBJS)
     vcpkg_execute_required_process(
