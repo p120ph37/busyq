@@ -19,6 +19,23 @@ busyq_gen_prefix_header(fu "${_prefix_h}")
 # Allow running configure as root inside containers
 set(ENV{FORCE_UNSAFE_CONFIGURE} "1")
 
+# Rename main() at source level for each tool (LTO-safe — objcopy can't
+# rename symbols in LLVM bitcode objects)
+vcpkg_execute_required_process(
+    COMMAND sh -c "
+        set -e
+        for f in find/ftsfind.c find/find.c; do
+            if [ -f '${SOURCE_PATH}/'\"\$f\" ]; then
+                sed -i '1i #define main find_main' '${SOURCE_PATH}/'\"\$f\"
+                break
+            fi
+        done
+        sed -i '1i #define main xargs_main' '${SOURCE_PATH}/xargs/xargs.c'
+    "
+    WORKING_DIRECTORY "${SOURCE_PATH}"
+    LOGNAME "rename-mains-${TARGET_TRIPLET}"
+)
+
 vcpkg_configure_make(
     SOURCE_PATH "${SOURCE_PATH}"
     OPTIONS
@@ -60,27 +77,10 @@ vcpkg_execute_required_process(
     LOGNAME "ar-raw-${TARGET_TRIPLET}"
 )
 
-# Rename mains and combine (no --prefix-symbols — compile-time prefix preserves bitcode)
+# Combine objects and package (mains already renamed at source level)
 vcpkg_execute_required_process(
     COMMAND sh -c "
         set -e
-
-        # Rename main in each tool's object file
-        for f in find/ftsfind.o find/find.o; do
-            if [ -f \"\$f\" ] && nm \"\$f\" 2>/dev/null | grep -q ' T main$'; then
-                objcopy --redefine-sym main=find_main \"\$f\"
-                break
-            fi
-        done
-        for f in xargs/xargs.o; do
-            if [ -f \"\$f\" ] && nm \"\$f\" 2>/dev/null | grep -q ' T main$'; then
-                objcopy --redefine-sym main=xargs_main \"\$f\"
-                break
-            fi
-        done
-
-        # Rebuild archive with renamed mains
-        find find xargs lib gl -name '*.o' ! -path '*/tests/*' ! -path '*/gnulib-tests/*' 2>/dev/null | xargs ar rcs libfindutils_raw.a
 
         # Combine all objects into one relocatable .o
         ld -r --whole-archive libfindutils_raw.a -o combined.o \

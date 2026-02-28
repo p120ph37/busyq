@@ -23,6 +23,36 @@ busyq_gen_prefix_header(procps "${_prefix_h}")
 
 set(ENV{FORCE_UNSAFE_CONFIGURE} "1")
 
+# Rename main() at source level for each tool (LTO-safe — objcopy can't
+# rename symbols in LLVM bitcode objects)
+# Most tools: src/<tool>.c, special cases: src/ps/display.c, src/top/top.c
+set(_procps_main_renames
+    "free:src/free.c"
+    "pgrep:src/pgrep.c"
+    "pidof:src/pidof.c"
+    "pmap:src/pmap.c"
+    "pwdx:src/pwdx.c"
+    "watch:src/watch.c"
+    "sysctl:src/sysctl.c"
+    "vmstat:src/vmstat.c"
+    "uptime:src/uptime.c"
+    "w:src/w.c"
+    "tload:src/tload.c"
+    "slabtop:src/slabtop.c"
+    "top:src/top/top.c"
+    "ps:src/ps/display.c"
+)
+foreach(_entry ${_procps_main_renames})
+    string(REPLACE ":" ";" _parts "${_entry}")
+    list(GET _parts 0 _tool)
+    list(GET _parts 1 _file)
+    set(_path "${SOURCE_PATH}/${_file}")
+    if(EXISTS "${_path}")
+        file(READ "${_path}" _content)
+        file(WRITE "${_path}" "#define main ${_tool}_main\n${_content}")
+    endif()
+endforeach()
+
 # Alpine's disable-test_pids-check.patch touches Makefile.am for tests only.
 # We never run `make check`, so autoreconf is not needed. Touch Makefile.in
 # to prevent automake from triggering a rebuild during `make`.
@@ -79,32 +109,15 @@ vcpkg_execute_required_process(
     LOGNAME "ar-raw-${TARGET_TRIPLET}"
 )
 
-# Rename mains and combine (no --prefix-symbols — compile-time prefix preserves bitcode)
+# Combine objects and package (mains already renamed at source level)
 vcpkg_execute_required_process(
     COMMAND sh -c "
         set -e
-
-        # Rename main in each tool's object file dynamically
-        for obj in \$(find src/ -name '*.o' ! -path '*/tests/*' ! -path '*/testsuite/*' 2>/dev/null); do
-            if nm \"\$obj\" 2>/dev/null | grep -q ' T main$'; then
-                tool=\$(basename \"\$obj\" .o)
-                objcopy --redefine-sym main=\"\${tool}_main\" \"\$obj\"
-            fi
-        done
-
-        find src/ library/ local/ lib/ -name '*.o' ! -path '*/tests/*' ! -path '*/testsuite/*' 2>/dev/null | sort > obj_list.txt
-        ar rcs libprocps_raw.a \$(cat obj_list.txt) 2>/dev/null || true
 
         # Combine all objects into one relocatable .o
         ld -r --whole-archive libprocps_raw.a -o combined.o \
             -z muldefs 2>/dev/null \
         || ld -r --whole-archive libprocps_raw.a -o combined.o
-
-        # Fix known entry point mismatches (file basename != tool name)
-        # ps: main() is in src/ps/display.c, not src/ps/ps.c
-        if nm combined.o 2>/dev/null | grep -q ' T display_main'; then
-            objcopy --redefine-sym display_main=ps_main combined.o
-        fi
 
         # Package into final archive
         ar rcs '${CURRENT_PACKAGES_DIR}/lib/libprocps.a' combined.o

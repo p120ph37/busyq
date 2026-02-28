@@ -23,6 +23,28 @@ set(BC_CFLAGS "${VCPKG_DETECTED_CMAKE_C_FLAGS} ${VCPKG_DETECTED_CMAKE_C_FLAGS_RE
 
 set(ENV{FORCE_UNSAFE_CONFIGURE} "1")
 
+# Rename main() at source level for each tool (LTO-safe — objcopy can't
+# rename symbols in LLVM bitcode objects)
+vcpkg_execute_required_process(
+    COMMAND sh -c "
+        set -e
+        for f in bc/main.c bc/bc.c; do
+            if [ -f '${SOURCE_PATH}/'\"'\$f'\" ]; then
+                sed -i '1i #define main bc_main' '${SOURCE_PATH}/'\"'\$f'\"
+                break
+            fi
+        done
+        for f in dc/main.c dc/dc.c; do
+            if [ -f '${SOURCE_PATH}/'\"'\$f'\" ]; then
+                sed -i '1i #define main dc_main' '${SOURCE_PATH}/'\"'\$f'\"
+                break
+            fi
+        done
+    "
+    WORKING_DIRECTORY "${SOURCE_PATH}"
+    LOGNAME "rename-mains-${TARGET_TRIPLET}"
+)
+
 vcpkg_configure_make(
     SOURCE_PATH "${SOURCE_PATH}"
     OPTIONS
@@ -58,29 +80,10 @@ vcpkg_execute_required_process(
     LOGNAME "ar-raw-${TARGET_TRIPLET}"
 )
 
-# Rename mains in bc and dc objects, combine, and package
-# Uses objcopy --redefine-sym (single symbol rename, safe with bitcode)
-# NOT objcopy --prefix-symbols (which destroys bitcode)
+# Combine objects and package (mains already renamed at source level)
 vcpkg_execute_required_process(
     COMMAND sh -c "
         set -e
-
-        # Rename main in bc and dc objects
-        for f in bc/main.o bc/bc.o; do
-            if [ -f \"\$f\" ] && nm \"\$f\" 2>/dev/null | grep -q ' T main$'; then
-                objcopy --redefine-sym main=bc_main \"\$f\"
-                break
-            fi
-        done
-        for f in dc/main.o dc/dc.o; do
-            if [ -f \"\$f\" ] && nm \"\$f\" 2>/dev/null | grep -q ' T main$'; then
-                objcopy --redefine-sym main=dc_main \"\$f\"
-                break
-            fi
-        done
-
-        # Rebuild archive with renamed mains
-        find bc dc lib -name '*.o' 2>/dev/null | xargs ar rcs libbc_raw.a
 
         # Combine all objects into one relocatable .o
         ld -r --whole-archive libbc_raw.a -o combined.o \

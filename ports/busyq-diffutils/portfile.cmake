@@ -19,6 +19,15 @@ busyq_gen_prefix_header(diff "${_prefix_h}")
 # Allow running configure as root inside containers
 set(ENV{FORCE_UNSAFE_CONFIGURE} "1")
 
+# Rename main() at source level for each tool (LTO-safe — objcopy can't
+# rename symbols in LLVM bitcode objects)
+foreach(_tool diff cmp diff3 sdiff)
+    if(EXISTS "${SOURCE_PATH}/src/${_tool}.c")
+        file(READ "${SOURCE_PATH}/src/${_tool}.c" _content)
+        file(WRITE "${SOURCE_PATH}/src/${_tool}.c" "#define main ${_tool}_main\n${_content}")
+    endif()
+endforeach()
+
 vcpkg_configure_make(
     SOURCE_PATH "${SOURCE_PATH}"
     OPTIONS
@@ -47,22 +56,7 @@ if(NOT DU_OBJS)
     message(FATAL_ERROR "No diffutils object files found in ${DU_BUILD_REL}")
 endif()
 
-# Rename main in each tool's object file before combining
-vcpkg_execute_required_process(
-    COMMAND sh -c "
-        set -e
-        for tool in diff cmp diff3 sdiff; do
-            obj='${DU_BUILD_REL}/src/'\"\$tool\".o
-            if [ -f \"\$obj\" ]; then
-                objcopy --redefine-sym main=\"\${tool}_main\" \"\$obj\"
-            fi
-        done
-    "
-    WORKING_DIRECTORY "${DU_BUILD_REL}"
-    LOGNAME "rename-mains-${TARGET_TRIPLET}"
-)
-
-# Pack into temporary archive
+# Pack into temporary archive (mains already renamed at source level)
 vcpkg_execute_required_process(
     COMMAND ar rcs "${DU_BUILD_REL}/libdiffutils_raw.a" ${DU_OBJS}
     WORKING_DIRECTORY "${DU_BUILD_REL}"

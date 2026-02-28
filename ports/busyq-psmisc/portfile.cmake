@@ -17,6 +17,16 @@ busyq_gen_prefix_header(psmisc "${_prefix_h}")
 
 set(ENV{FORCE_UNSAFE_CONFIGURE} "1")
 
+# Rename main() at source level for each tool (LTO-safe — objcopy can't
+# rename symbols in LLVM bitcode objects)
+foreach(_tool killall fuser pstree)
+    set(_file "${SOURCE_PATH}/src/${_tool}.c")
+    if(EXISTS "${_file}")
+        file(READ "${_file}" _content)
+        file(WRITE "${_file}" "#define main ${_tool}_main\n${_content}")
+    endif()
+endforeach()
+
 # vcpkg builds ncurses as libncursesw.a (wide-char), but psmisc's configure
 # checks for -ltinfo / -lncurses / -ltermcap via AC_CHECK_LIB. Create
 # compatibility symlinks so the linker check succeeds.
@@ -60,21 +70,10 @@ vcpkg_execute_required_process(
     LOGNAME "ar-raw-${TARGET_TRIPLET}"
 )
 
-# Rename mains and combine (no --prefix-symbols — compile-time prefix preserves bitcode)
+# Combine objects and package (mains already renamed at source level)
 vcpkg_execute_required_process(
     COMMAND sh -c "
         set -e
-
-        # Rename main in each tool's object file dynamically
-        for obj in \$(find src/ -name '*.o' ! -path '*/tests/*' ! -path '*/testsuite/*' 2>/dev/null); do
-            if nm \"\$obj\" 2>/dev/null | grep -q ' T main$'; then
-                tool=\$(basename \"\$obj\" .o)
-                objcopy --redefine-sym main=\"\${tool}_main\" \"\$obj\"
-            fi
-        done
-
-        find src/ -name '*.o' ! -path '*/tests/*' ! -path '*/testsuite/*' 2>/dev/null | sort > obj_list.txt
-        ar rcs libpsmisc_raw.a \$(cat obj_list.txt) 2>/dev/null || true
 
         # Combine all objects into one relocatable .o
         ld -r --whole-archive libpsmisc_raw.a -o combined.o \

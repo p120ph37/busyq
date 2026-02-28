@@ -31,6 +31,16 @@ foreach(_src shar.c unshar.c uuencode.c uudecode.c)
     endif()
 endforeach()
 
+# Rename main() at source level for each tool (LTO-safe — objcopy can't
+# rename symbols in LLVM bitcode objects)
+foreach(_tool shar unshar uuencode uudecode)
+    set(_file "${SOURCE_PATH}/src/${_tool}.c")
+    if(EXISTS "${_file}")
+        file(READ "${_file}" _content)
+        file(WRITE "${_file}" "#define main ${_tool}_main\n${_content}")
+    endif()
+endforeach()
+
 # Detect toolchain flags
 vcpkg_cmake_get_vars(cmake_vars_file)
 include("${cmake_vars_file}")
@@ -80,21 +90,10 @@ vcpkg_execute_required_process(
     LOGNAME "ar-raw-${TARGET_TRIPLET}"
 )
 
-# Rename mains and combine (no --prefix-symbols — compile-time prefix preserves bitcode)
+# Combine objects and package (mains already renamed at source level)
 vcpkg_execute_required_process(
     COMMAND sh -c "
         set -e
-
-        # Rename main in each tool's object file
-        for tool in shar unshar uuencode uudecode; do
-            obj=\"src/\${tool}.o\"
-            if [ -f \"\$obj\" ] && nm \"\$obj\" 2>/dev/null | grep -q ' T main$'; then
-                objcopy --redefine-sym main=\"\${tool}_main\" \"\$obj\"
-            fi
-        done
-
-        # Rebuild archive with renamed mains
-        find src lib libopts -name '*.o' 2>/dev/null | xargs ar rcs libshar_raw.a
 
         # Combine all objects into one relocatable .o
         ld -r --whole-archive libshar_raw.a -o combined.o \
