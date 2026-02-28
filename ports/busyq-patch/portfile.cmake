@@ -21,10 +21,6 @@ busyq_gen_prefix_header(patch "${_prefix_h}")
 # Allow running configure as root inside containers
 set(ENV{FORCE_UNSAFE_CONFIGURE} "1")
 
-# Rename main() at source level (LTO-safe — do NOT use -Dmain in CPPFLAGS,
-# it breaks autotools helper programs)
-busyq_rename_main(patch "${SOURCE_PATH}/src/patch.c")
-
 vcpkg_configure_make(
     SOURCE_PATH "${SOURCE_PATH}"
     OPTIONS
@@ -32,6 +28,9 @@ vcpkg_configure_make(
 )
 
 vcpkg_build_make(OPTIONS "CPPFLAGS=-include ${_prefix_h}")
+
+# Rename main() after the build — doing it before would break the link step
+busyq_post_build_rename_main(patch "${_prefix_h}" "${SOURCE_PATH}/src/patch.c")
 
 set(PATCH_BUILD_REL "${CURRENT_BUILDTREES_DIR}/${TARGET_TRIPLET}-rel")
 

@@ -22,23 +22,6 @@ busyq_gen_prefix_header(fu "${_prefix_h}")
 # Allow running configure as root inside containers
 set(ENV{FORCE_UNSAFE_CONFIGURE} "1")
 
-# Rename main() at source level for each tool (LTO-safe — objcopy can't
-# rename symbols in LLVM bitcode objects)
-vcpkg_execute_required_process(
-    COMMAND sh -c "
-        set -e
-        for f in find/ftsfind.c find/find.c; do
-            if [ -f '${SOURCE_PATH}/'\"\$f\" ]; then
-                sed -i '1i #define main find_main' '${SOURCE_PATH}/'\"\$f\"
-                break
-            fi
-        done
-        sed -i '1i #define main xargs_main' '${SOURCE_PATH}/xargs/xargs.c'
-    "
-    WORKING_DIRECTORY "${SOURCE_PATH}"
-    LOGNAME "rename-mains-${TARGET_TRIPLET}"
-)
-
 vcpkg_configure_make(
     SOURCE_PATH "${SOURCE_PATH}"
     OPTIONS
@@ -46,6 +29,15 @@ vcpkg_configure_make(
 )
 
 vcpkg_build_make(OPTIONS "CPPFLAGS=-include ${_prefix_h}")
+
+# Rename main() after the build — doing it before would break the link step
+busyq_post_build_rename_main(find "${_prefix_h}"
+    "${SOURCE_PATH}/find/ftsfind.c"
+    "${SOURCE_PATH}/find/find.c"
+)
+busyq_post_build_rename_main(xargs "${_prefix_h}"
+    "${SOURCE_PATH}/xargs/xargs.c"
+)
 
 set(FU_BUILD_REL "${CURRENT_BUILDTREES_DIR}/${TARGET_TRIPLET}-rel")
 

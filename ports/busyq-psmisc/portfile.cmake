@@ -20,16 +20,6 @@ busyq_gen_prefix_header(psmisc "${_prefix_h}")
 
 set(ENV{FORCE_UNSAFE_CONFIGURE} "1")
 
-# Rename main() at source level for each tool (LTO-safe — objcopy can't
-# rename symbols in LLVM bitcode objects)
-foreach(_tool killall fuser pstree)
-    set(_file "${SOURCE_PATH}/src/${_tool}.c")
-    if(EXISTS "${_file}")
-        file(READ "${_file}" _content)
-        file(WRITE "${_file}" "#define main ${_tool}_main\n${_content}")
-    endif()
-endforeach()
-
 # vcpkg builds ncurses as libncursesw.a (wide-char), but psmisc's configure
 # checks for -ltinfo / -lncurses / -ltermcap via AC_CHECK_LIB. Create
 # compatibility symlinks so the linker check succeeds.
@@ -50,6 +40,11 @@ vcpkg_configure_make(
 )
 
 vcpkg_build_make(OPTIONS "CPPFLAGS=-include ${_prefix_h}")
+
+# Rename main() after the build — doing it before would break the link step
+foreach(_tool killall fuser pstree)
+    busyq_post_build_rename_main(${_tool} "${_prefix_h}" "${SOURCE_PATH}/src/${_tool}.c")
+endforeach()
 
 set(PSMISC_BUILD_REL "${CURRENT_BUILDTREES_DIR}/${TARGET_TRIPLET}-rel")
 

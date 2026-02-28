@@ -10,14 +10,15 @@
 #   include("${CMAKE_CURRENT_LIST_DIR}/../../scripts/cmake/busyq_symbol_helpers.cmake")
 #
 #   busyq_gen_prefix_header(gawk "${SOURCE_PATH}/gawk_prefix.h")
-#   busyq_rename_main(gawk "${SOURCE_PATH}/main.c")
 #
 #   vcpkg_build_make(OPTIONS "CPPFLAGS=-include ${_prefix_h}")
 #
-# IMPORTANT: Do NOT use -Dmain=xxx_main in CPPFLAGS — it renames main()
-# in ALL compiled files including autotools helper programs, breaking the
-# build. Use busyq_rename_main() instead, which only modifies the specific
-# source file containing the tool's main().
+#   busyq_post_build_rename_main(gawk "${_prefix_h}" "${SOURCE_PATH}/main.c")
+#
+# The main() rename is done AFTER the build because renaming it before
+# would cause the link step to fail (undefined symbol: main).
+# busyq_post_build_rename_main recompiles just the one .o file using make,
+# which preserves all compiler flags and include paths from the Makefile.
 #
 # Requires busyq-bash to be installed (add dependency in vcpkg.json).
 
@@ -66,25 +67,51 @@ function(busyq_gen_prefix_header _prefix _output_file)
     )
 endfunction()
 
-# busyq_rename_main(<tool_name> <source_file> [<source_file2> ...])
+# busyq_post_build_rename_main(<tool> <prefix_header> <source> [<source2> ...])
 #
-# Prepends '#define main <tool_name>_main' to the first existing source file
-# from the candidate list. This renames main() at the preprocessor level
-# before compilation, which is LTO-safe (unlike objcopy --redefine-sym).
+# Recompiles a single source file AFTER the build to rename main() to
+# <tool>_main. Must be called AFTER vcpkg_build_make() — the initial build
+# needs a real main() for the link step to succeed.
 #
-# IMPORTANT: This must be called BEFORE vcpkg_configure_make() so the
-# rename is in place before any compilation occurs.
+# Takes a list of candidate source files and uses the first one that exists
+# (same semantics as the old busyq_rename_main).
 #
-# Do NOT use -Dmain=xxx_main in CPPFLAGS — that renames main() in ALL
-# compiled files including autotools helper programs (conftest, gnulib
-# test programs), breaking the build.
-function(busyq_rename_main _tool)
+# Implementation: touches the source to invalidate make's dependency tracking,
+# then runs `make <basename>.o` with -Dmain=<tool>_main added to CPPFLAGS.
+# This preserves all compiler flags, include paths, etc. from the Makefile.
+function(busyq_post_build_rename_main _tool _prefix_h)
+    # Find the first existing candidate source file
+    set(_source "")
     foreach(_file ${ARGN})
         if(EXISTS "${_file}")
-            file(READ "${_file}" _content)
-            file(WRITE "${_file}" "#define main ${_tool}_main\n${_content}")
-            return()
+            set(_source "${_file}")
+            break()
         endif()
     endforeach()
-    message(FATAL_ERROR "busyq_rename_main(${_tool}): no candidate source files found: ${ARGN}")
+    if(NOT _source)
+        message(FATAL_ERROR "busyq_post_build_rename_main(${_tool}): no candidate source files found: ${ARGN}")
+    endif()
+
+    # Determine build subdirectory from source path relative to SOURCE_PATH
+    file(RELATIVE_PATH _rel "${SOURCE_PATH}" "${_source}")
+    get_filename_component(_dir "${_rel}" DIRECTORY)
+    get_filename_component(_name "${_rel}" NAME_WE)
+
+    set(_build_rel "${CURRENT_BUILDTREES_DIR}/${TARGET_TRIPLET}-rel")
+    if(_dir)
+        set(_work_dir "${_build_rel}/${_dir}")
+    else()
+        set(_work_dir "${_build_rel}")
+    endif()
+
+    # Touch source to force make to rebuild this .o file
+    file(TOUCH "${_source}")
+
+    vcpkg_execute_required_process(
+        COMMAND make "${_name}.o"
+            "CPPFLAGS=-include ${_prefix_h} -Dmain=${_tool}_main"
+            V=1
+        WORKING_DIRECTORY "${_work_dir}"
+        LOGNAME "rename-main-${_tool}-${TARGET_TRIPLET}"
+    )
 endfunction()

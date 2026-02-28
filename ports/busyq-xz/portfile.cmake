@@ -23,10 +23,6 @@ set(XZ_CFLAGS "${VCPKG_DETECTED_CMAKE_C_FLAGS} ${VCPKG_DETECTED_CMAKE_C_FLAGS_RE
 # xz dispatches on argv[0]: xz/unxz/xzcat/lzma/unlzma/lzcat
 set(ENV{FORCE_UNSAFE_CONFIGURE} "1")
 
-# Rename main() at source level (LTO-safe — do NOT use -Dmain in CPPFLAGS,
-# it breaks autotools helper programs)
-busyq_rename_main(xz "${SOURCE_PATH}/src/xz/main.c")
-
 vcpkg_configure_make(
     SOURCE_PATH "${SOURCE_PATH}"
     OPTIONS
@@ -40,6 +36,9 @@ vcpkg_configure_make(
 )
 
 vcpkg_build_make(OPTIONS "CPPFLAGS=-include ${_prefix_h}")
+
+# Rename main() after the build — doing it before would break the link step
+busyq_post_build_rename_main(xz "${_prefix_h}" "${SOURCE_PATH}/src/xz/main.c")
 
 set(XZ_BUILD_REL "${CURRENT_BUILDTREES_DIR}/${TARGET_TRIPLET}-rel")
 

@@ -26,8 +26,28 @@ busyq_gen_prefix_header(procps "${_prefix_h}")
 
 set(ENV{FORCE_UNSAFE_CONFIGURE} "1")
 
-# Rename main() at source level for each tool (LTO-safe — objcopy can't
-# rename symbols in LLVM bitcode objects)
+# Alpine's disable-test_pids-check.patch touches Makefile.am for tests only.
+# We never run `make check`, so autoreconf is not needed. Touch Makefile.in
+# to prevent automake from triggering a rebuild during `make`.
+file(GLOB_RECURSE _makefiles "${SOURCE_PATH}/Makefile.in")
+foreach(_mf ${_makefiles})
+    file(TOUCH "${_mf}")
+endforeach()
+
+vcpkg_configure_make(
+    SOURCE_PATH "${SOURCE_PATH}"
+    OPTIONS
+        --disable-nls
+        --disable-shared
+        --enable-static
+        --without-systemd
+        --disable-kill
+        --enable-watch
+)
+
+vcpkg_build_make(OPTIONS "CPPFLAGS=-include ${_prefix_h}")
+
+# Rename main() after the build — doing it before would break the link step
 # Most tools: src/<tool>.c, special cases: src/ps/display.c, src/top/top.c
 set(_procps_main_renames
     "free:src/free.c"
@@ -49,33 +69,8 @@ foreach(_entry ${_procps_main_renames})
     string(REPLACE ":" ";" _parts "${_entry}")
     list(GET _parts 0 _tool)
     list(GET _parts 1 _file)
-    set(_path "${SOURCE_PATH}/${_file}")
-    if(EXISTS "${_path}")
-        file(READ "${_path}" _content)
-        file(WRITE "${_path}" "#define main ${_tool}_main\n${_content}")
-    endif()
+    busyq_post_build_rename_main(${_tool} "${_prefix_h}" "${SOURCE_PATH}/${_file}")
 endforeach()
-
-# Alpine's disable-test_pids-check.patch touches Makefile.am for tests only.
-# We never run `make check`, so autoreconf is not needed. Touch Makefile.in
-# to prevent automake from triggering a rebuild during `make`.
-file(GLOB_RECURSE _makefiles "${SOURCE_PATH}/Makefile.in")
-foreach(_mf ${_makefiles})
-    file(TOUCH "${_mf}")
-endforeach()
-
-vcpkg_configure_make(
-    SOURCE_PATH "${SOURCE_PATH}"
-    OPTIONS
-        --disable-nls
-        --disable-shared
-        --enable-static
-        --without-systemd
-        --disable-kill
-        --enable-watch
-)
-
-vcpkg_build_make(OPTIONS "CPPFLAGS=-include ${_prefix_h}")
 
 set(PROCPS_BUILD_REL "${CURRENT_BUILDTREES_DIR}/${TARGET_TRIPLET}-rel")
 

@@ -22,15 +22,6 @@ busyq_gen_prefix_header(diff "${_prefix_h}")
 # Allow running configure as root inside containers
 set(ENV{FORCE_UNSAFE_CONFIGURE} "1")
 
-# Rename main() at source level for each tool (LTO-safe — objcopy can't
-# rename symbols in LLVM bitcode objects)
-foreach(_tool diff cmp diff3 sdiff)
-    if(EXISTS "${SOURCE_PATH}/src/${_tool}.c")
-        file(READ "${SOURCE_PATH}/src/${_tool}.c" _content)
-        file(WRITE "${SOURCE_PATH}/src/${_tool}.c" "#define main ${_tool}_main\n${_content}")
-    endif()
-endforeach()
-
 vcpkg_configure_make(
     SOURCE_PATH "${SOURCE_PATH}"
     OPTIONS
@@ -38,6 +29,11 @@ vcpkg_configure_make(
 )
 
 vcpkg_build_make(OPTIONS "CPPFLAGS=-include ${_prefix_h}")
+
+# Rename main() after the build — doing it before would break the link step
+foreach(_tool diff cmp diff3 sdiff)
+    busyq_post_build_rename_main(${_tool} "${_prefix_h}" "${SOURCE_PATH}/src/${_tool}.c")
+endforeach()
 
 set(DU_BUILD_REL "${CURRENT_BUILDTREES_DIR}/${TARGET_TRIPLET}-rel")
 

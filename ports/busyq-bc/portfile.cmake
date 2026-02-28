@@ -26,28 +26,6 @@ set(BC_CFLAGS "${VCPKG_DETECTED_CMAKE_C_FLAGS} ${VCPKG_DETECTED_CMAKE_C_FLAGS_RE
 
 set(ENV{FORCE_UNSAFE_CONFIGURE} "1")
 
-# Rename main() at source level for each tool (LTO-safe — objcopy can't
-# rename symbols in LLVM bitcode objects)
-vcpkg_execute_required_process(
-    COMMAND sh -c "
-        set -e
-        for f in bc/main.c bc/bc.c; do
-            if [ -f '${SOURCE_PATH}/'\"'\$f'\" ]; then
-                sed -i '1i #define main bc_main' '${SOURCE_PATH}/'\"'\$f'\"
-                break
-            fi
-        done
-        for f in dc/main.c dc/dc.c; do
-            if [ -f '${SOURCE_PATH}/'\"'\$f'\" ]; then
-                sed -i '1i #define main dc_main' '${SOURCE_PATH}/'\"'\$f'\"
-                break
-            fi
-        done
-    "
-    WORKING_DIRECTORY "${SOURCE_PATH}"
-    LOGNAME "rename-mains-${TARGET_TRIPLET}"
-)
-
 vcpkg_configure_make(
     SOURCE_PATH "${SOURCE_PATH}"
     OPTIONS
@@ -56,6 +34,16 @@ vcpkg_configure_make(
 )
 
 vcpkg_build_make(OPTIONS "CPPFLAGS=-include ${_prefix_h}")
+
+# Rename main() after the build — doing it before would break the link step
+busyq_post_build_rename_main(bc "${_prefix_h}"
+    "${SOURCE_PATH}/bc/main.c"
+    "${SOURCE_PATH}/bc/bc.c"
+)
+busyq_post_build_rename_main(dc "${_prefix_h}"
+    "${SOURCE_PATH}/dc/main.c"
+    "${SOURCE_PATH}/dc/dc.c"
+)
 
 set(BC_BUILD_REL "${CURRENT_BUILDTREES_DIR}/${TARGET_TRIPLET}-rel")
 
