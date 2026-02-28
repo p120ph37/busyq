@@ -77,8 +77,11 @@ endfunction()
 # (same semantics as the old busyq_rename_main).
 #
 # Implementation: touches the source to invalidate make's dependency tracking,
-# then runs `make <basename>.o` with -Dmain=<tool>_main added to CPPFLAGS.
+# then runs `make <target>.o` with -Dmain=<tool>_main added to CPPFLAGS.
 # This preserves all compiler flags, include paths, etc. from the Makefile.
+#
+# Handles both recursive make (Makefile in each subdirectory, e.g. GNU grep)
+# and non-recursive make (single top-level Makefile, e.g. lsof, procps).
 function(busyq_post_build_rename_main _tool _prefix_h)
     # Find the first existing candidate source file
     set(_source "")
@@ -98,17 +101,31 @@ function(busyq_post_build_rename_main _tool _prefix_h)
     get_filename_component(_name "${_rel}" NAME_WE)
 
     set(_build_rel "${CURRENT_BUILDTREES_DIR}/${TARGET_TRIPLET}-rel")
-    if(_dir)
+
+    # Detect recursive vs non-recursive make:
+    # - Recursive make: Makefile exists in the subdirectory (e.g. build/src/Makefile)
+    #   → run `make <name>.o` from the subdirectory
+    # - Non-recursive make: only the top-level Makefile exists
+    #   → run `make <dir>/<name>.o` from the build root
+    if(_dir AND EXISTS "${_build_rel}/${_dir}/Makefile")
+        # Recursive make: cd into subdirectory, target is just the basename
         set(_work_dir "${_build_rel}/${_dir}")
+        set(_target "${_name}.o")
     else()
+        # Non-recursive make (or source at root): run from build root
         set(_work_dir "${_build_rel}")
+        if(_dir)
+            set(_target "${_dir}/${_name}.o")
+        else()
+            set(_target "${_name}.o")
+        endif()
     endif()
 
     # Touch source to force make to rebuild this .o file
     file(TOUCH "${_source}")
 
     vcpkg_execute_required_process(
-        COMMAND make "${_name}.o"
+        COMMAND make "${_target}"
             "CPPFLAGS=-include ${_prefix_h} -Dmain=${_tool}_main"
             V=1
         WORKING_DIRECTORY "${_work_dir}"
