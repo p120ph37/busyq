@@ -5,6 +5,9 @@
 vcpkg_cmake_get_vars(cmake_vars_file)
 include("${cmake_vars_file}")
 
+# Only build release (debug artifacts are unused)
+set(VCPKG_BUILD_TYPE release)
+
 set(WHOIS_CC "${VCPKG_DETECTED_CMAKE_C_COMPILER}")
 set(WHOIS_CFLAGS "${VCPKG_DETECTED_CMAKE_C_FLAGS} ${VCPKG_DETECTED_CMAKE_C_FLAGS_RELEASE}")
 

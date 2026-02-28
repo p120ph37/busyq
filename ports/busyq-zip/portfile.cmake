@@ -25,6 +25,9 @@ busyq_alpine_source(
 vcpkg_cmake_get_vars(cmake_vars_file)
 include("${cmake_vars_file}")
 
+# Only build release (debug artifacts are unused)
+set(VCPKG_BUILD_TYPE release)
+
 # --- Generate compile-time symbol prefix headers (LTO-safe) ---
 set(_zip_prefix_h "${ZIP_SOURCE_PATH}/zip_prefix.h")
 busyq_gen_prefix_header(zip "${_zip_prefix_h}")

@@ -1,5 +1,8 @@
 include("${CMAKE_CURRENT_LIST_DIR}/../../scripts/cmake/busyq_alpine_helpers.cmake")
 
+# Only build release (debug artifacts are unused)
+set(VCPKG_BUILD_TYPE release)
+
 # SSL patches are guarded by #ifdef BUSYQ_EMBEDDED_CERTS / USE_MBEDTLS,
 # so they're safe to apply unconditionally.
 if("ssl" IN_LIST FEATURES)

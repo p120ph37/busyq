@@ -1,3 +1,6 @@
+# Only build release (debug artifacts are unused)
+set(VCPKG_BUILD_TYPE release)
+
 vcpkg_download_distfile(ARCHIVE
     URLS
         "https://ftpmirror.gnu.org/gnu/bash/bash-5.3.tar.gz"
