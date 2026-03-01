@@ -244,7 +244,7 @@ set(BUSYQ_MRI "${CMAKE_CURRENT_BINARY_DIR}/libbusyq.mri")
 
 # Generate the MRI script at configure time
 set(_mri_content "create ${BUSYQ_LIB}\n")
-string(APPEND _mri_content "addmod $<TARGET_OBJECTS:busyq_main>\n")
+string(APPEND _mri_content "addmod $<JOIN:$<TARGET_OBJECTS:busyq_main>,\naddmod >\n")
 foreach(_lib ${BUSYQ_COMPONENT_LIBS})
     string(APPEND _mri_content "addlib ${_lib}\n")
 endforeach()
