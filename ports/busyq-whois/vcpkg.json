@@ -1,0 +1,12 @@
+{
+  "name": "busyq-whois",
+  "version-string": "1.0.0",
+  "description": "Minimal whois client built as a static library for busyq",
+  "license": "MIT",
+  "dependencies": [
+    {
+      "name": "vcpkg-cmake-get-vars",
+      "host": true
+    }
+  ]
+}

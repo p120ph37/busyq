@@ -1,10 +1,11 @@
-vcpkg_download_distfile(ARCHIVE
-    URLS "https://github.com/jqlang/jq/releases/download/jq-1.8.1/jq-1.8.1.tar.gz"
-    FILENAME "jq-1.8.1.tar.gz"
-    SHA512 b09d48dbeaac7b552397b75692ed7833afa72186de80d977fb1b887a14ac66c02f677acdd79f9a2736db1fd738b7ce57a39725e34846bfa21ed3728cd7adc187
-)
+include("${CMAKE_CURRENT_LIST_DIR}/../../scripts/cmake/busyq_alpine_helpers.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/../../scripts/cmake/busyq_symbol_helpers.cmake")
 
-vcpkg_extract_source_archive(SOURCE_PATH ARCHIVE "${ARCHIVE}")
+busyq_alpine_source(
+    PORT_DIR "${CMAKE_CURRENT_LIST_DIR}"
+    OUT_SOURCE_PATH SOURCE_PATH
+    USE_PATCH_CMD
+)
 
 # Detect toolchain flags FIRST, before autotools configure claims the build
 # directory. vcpkg_cmake_get_vars creates a temporary cmake project in the
@@ -12,6 +13,9 @@ vcpkg_extract_source_archive(SOURCE_PATH ARCHIVE "${ARCHIVE}")
 # artifacts (config.h, version.h, libjq.a) that we need later.
 vcpkg_cmake_get_vars(cmake_vars_file)
 include("${cmake_vars_file}")
+
+# Only build release (debug artifacts are unused)
+set(VCPKG_BUILD_TYPE release)
 
 set(JQ_CC "${VCPKG_DETECTED_CMAKE_C_COMPILER}")
 set(JQ_CFLAGS "${VCPKG_DETECTED_CMAKE_C_FLAGS} ${VCPKG_DETECTED_CMAKE_C_FLAGS_RELEASE}")
@@ -71,8 +75,4 @@ file(INSTALL
     DESTINATION "${CURRENT_PACKAGES_DIR}/include"
 )
 
-# Suppress vcpkg post-build warnings — we only produce release libraries
-set(VCPKG_POLICY_MISMATCHED_NUMBER_OF_BINARIES enabled)
-
-# Install copyright
-vcpkg_install_copyright(FILE_LIST "${SOURCE_PATH}/COPYING")
+busyq_finalize_port()

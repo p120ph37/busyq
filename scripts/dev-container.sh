@@ -140,7 +140,8 @@ dev-start() {
     # Install build dependencies
     echo "dev-container: installing build dependencies..."
     docker exec "${DEV_CONTAINER_NAME}" \
-        apk add --no-cache bison flex linux-headers perl xz 2>&1 | tail -1
+        apk add --no-cache bison flex linux-headers perl xz \
+        autoconf automake libtool texinfo ed patch gettext-dev 2>&1 | tail -1
 
     echo "dev-container: ready. Use 'dev-exec <cmd>' to run commands."
 }
@@ -164,7 +165,9 @@ dev-build() {
     echo "dev-container: configuring + building busyq (no SSL)..."
     dev-exec 'cmake --preset no-ssl && cmake --build --preset no-ssl'
 
-    echo "dev-container: build complete. Binary at build/no-ssl/busyq"
+    echo "dev-container: build complete."
+    echo "  Binary:  build/no-ssl/busyq"
+    echo "  Library: build/no-ssl/libbusyq.a"
 }
 
 # ── Stop and remove the container ────────────────────────────────────────

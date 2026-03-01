@@ -1,0 +1,12 @@
+{
+  "name": "busyq-strings",
+  "version-string": "1.0.0",
+  "description": "Minimal standalone strings implementation for busyq",
+  "license": "MIT",
+  "dependencies": [
+    {
+      "name": "vcpkg-cmake-get-vars",
+      "host": true
+    }
+  ]
+}

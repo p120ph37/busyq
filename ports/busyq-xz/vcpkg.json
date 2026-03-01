@@ -1,0 +1,17 @@
+{
+  "name": "busyq-xz",
+  "version-string": "5.8.2",
+  "description": "xz-utils built as a static library for busyq",
+  "license": "0BSD",
+  "dependencies": [
+    "busyq-bash",
+    {
+      "name": "vcpkg-cmake-get-vars",
+      "host": true
+    },
+    {
+      "name": "vcpkg-make",
+      "host": true
+    }
+  ]
+}
