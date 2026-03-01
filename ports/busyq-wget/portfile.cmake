@@ -57,20 +57,8 @@ busyq_post_build_rename_main(wget "${_prefix_h}" "${SOURCE_PATH}/src/main.c")
 
 set(WGET_BUILD_REL "${CURRENT_BUILDTREES_DIR}/${TARGET_TRIPLET}-rel")
 
-file(MAKE_DIRECTORY "${CURRENT_PACKAGES_DIR}/lib")
-
 # --- Symbol isolation ---
 # wget embeds gnulib, causing symbol collisions with bash, coreutils, etc.
-# Strategy:
-#
-# 1. Collect all .o files into a temporary archive
-# 2. Use ld -r to combine into one relocatable object (resolves internal dupes)
-# 3. Record all undefined symbols (= external deps: libc, pthreads, etc.)
-# 4. Prefix ALL symbols with wget_ (namespaces everything)
-# 5. Unprefix the external deps so they link against libc correctly
-# 6. Rename wget_main -> wget_main (dispatch entry point)
-# 7. Package into libwget.a
-
 
 # Collect all object files from the build
 file(GLOB_RECURSE WGET_OBJS
@@ -83,30 +71,6 @@ if(NOT WGET_OBJS)
     message(FATAL_ERROR "No object files found in ${WGET_BUILD_REL}")
 endif()
 
-# Pack into temporary archive (needed for ld -r --whole-archive)
-vcpkg_execute_required_process(
-    COMMAND ar rcs "${WGET_BUILD_REL}/libwget_raw.a" ${WGET_OBJS}
-    WORKING_DIRECTORY "${WGET_BUILD_REL}"
-    LOGNAME "ar-raw-${TARGET_TRIPLET}"
-)
-# Combine objects and package (no objcopy — compile-time prefix preserves bitcode)
-vcpkg_execute_required_process(
-    COMMAND sh -c "
-        set -e
-        ld -r --whole-archive libwget_raw.a -o combined.o \
-            -z muldefs 2>/dev/null \
-        || ld -r --whole-archive libwget_raw.a -o combined.o
-        llvm-objcopy --wildcard --keep-global-symbol='*_main' combined.o
-        ar rcs '${CURRENT_PACKAGES_DIR}/lib/libwget.a' combined.o
-    "
-    WORKING_DIRECTORY "${WGET_BUILD_REL}"
-    LOGNAME "combine-${TARGET_TRIPLET}"
-)
+busyq_package_objects(libwget.a "${WGET_BUILD_REL}" OBJECTS ${WGET_OBJS})
 
-# Suppress vcpkg post-build warnings -- we only produce release libraries
-# and wget has no public headers (it's a tool, not a library)
-set(VCPKG_POLICY_MISMATCHED_NUMBER_OF_BINARIES enabled)
-set(VCPKG_POLICY_EMPTY_INCLUDE_FOLDER enabled)
-
-# Install copyright
-vcpkg_install_copyright(FILE_LIST "${SOURCE_PATH}/COPYING")
+busyq_finalize_port()

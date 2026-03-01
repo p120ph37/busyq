@@ -31,11 +31,8 @@ busyq_post_build_rename_main(less "${_prefix_h}" "${SOURCE_PATH}/main.c")
 
 set(LESS_BUILD_REL "${CURRENT_BUILDTREES_DIR}/${TARGET_TRIPLET}-rel")
 
-file(MAKE_DIRECTORY "${CURRENT_PACKAGES_DIR}/lib")
-
 # --- Symbol isolation ---
 # less embeds its own utility functions that may collide with other packages.
-
 
 # Collect all object files from the build
 file(GLOB LESS_OBJS
@@ -46,27 +43,6 @@ if(NOT LESS_OBJS)
     message(FATAL_ERROR "No object files found in ${LESS_BUILD_REL}")
 endif()
 
-# Pack into temporary archive (needed for ld -r --whole-archive)
-vcpkg_execute_required_process(
-    COMMAND ar rcs "${LESS_BUILD_REL}/libless_raw.a" ${LESS_OBJS}
-    WORKING_DIRECTORY "${LESS_BUILD_REL}"
-    LOGNAME "ar-raw-${TARGET_TRIPLET}"
-)
-# Combine objects and package (no objcopy — compile-time prefix preserves bitcode)
-vcpkg_execute_required_process(
-    COMMAND sh -c "
-        set -e
-        ld -r --whole-archive libless_raw.a -o combined.o \
-            -z muldefs 2>/dev/null \
-        || ld -r --whole-archive libless_raw.a -o combined.o
-        llvm-objcopy --wildcard --keep-global-symbol='*_main' combined.o
-        ar rcs '${CURRENT_PACKAGES_DIR}/lib/libless.a' combined.o
-    "
-    WORKING_DIRECTORY "${LESS_BUILD_REL}"
-    LOGNAME "combine-${TARGET_TRIPLET}"
-)
+busyq_package_objects(libless.a "${LESS_BUILD_REL}" OBJECTS ${LESS_OBJS})
 
-set(VCPKG_POLICY_MISMATCHED_NUMBER_OF_BINARIES enabled)
-set(VCPKG_POLICY_EMPTY_INCLUDE_FOLDER enabled)
-
-vcpkg_install_copyright(FILE_LIST "${SOURCE_PATH}/COPYING" "${SOURCE_PATH}/LICENSE")
+busyq_finalize_port(COPYRIGHT "${SOURCE_PATH}/COPYING" "${SOURCE_PATH}/LICENSE")

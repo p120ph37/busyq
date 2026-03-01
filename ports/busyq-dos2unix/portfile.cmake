@@ -60,7 +60,4 @@ vcpkg_execute_required_process(
     LOGNAME "build-${TARGET_TRIPLET}"
 )
 
-set(VCPKG_POLICY_MISMATCHED_NUMBER_OF_BINARIES enabled)
-set(VCPKG_POLICY_EMPTY_INCLUDE_FOLDER enabled)
-
-vcpkg_install_copyright(FILE_LIST "${SOURCE_PATH}/COPYING.txt")
+busyq_finalize_port(COPYRIGHT "${SOURCE_PATH}/COPYING.txt")

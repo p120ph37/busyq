@@ -57,10 +57,6 @@ busyq_post_build_rename_main(ed "${_prefix_h}"
     "${SOURCE_PATH}/main_loop.c"
 )
 
-file(MAKE_DIRECTORY "${CURRENT_PACKAGES_DIR}/lib")
-
-# --- Symbol isolation (no objcopy — compile-time prefix preserves bitcode) ---
-# Step 1: Collect all object files from the build
 file(GLOB ED_OBJS
     "${ED_BUILD_REL}/*.o"
 )
@@ -69,35 +65,6 @@ if(NOT ED_OBJS)
     message(FATAL_ERROR "No ed object files found in ${ED_BUILD_REL}")
 endif()
 
-# Step 1a: Pack into temporary archive (needed for ld -r --whole-archive)
-vcpkg_execute_required_process(
-    COMMAND ar rcs "${ED_BUILD_REL}/libed_raw.a" ${ED_OBJS}
-    WORKING_DIRECTORY "${ED_BUILD_REL}"
-    LOGNAME "ar-raw-${TARGET_TRIPLET}"
-)
+busyq_package_objects(libed.a "${ED_BUILD_REL}" OBJECTS ${ED_OBJS})
 
-# Combine into relocatable object and package
-vcpkg_execute_required_process(
-    COMMAND sh -c "
-        set -e
-
-        # Combine all objects into one relocatable .o
-        ld -r --whole-archive libed_raw.a -o ed_combined.o \
-            -z muldefs 2>/dev/null \
-        || ld -r --whole-archive libed_raw.a -o ed_combined.o
-        llvm-objcopy --wildcard --keep-global-symbol='*_main' ed_combined.o
-
-        # Package into final archive
-        ar rcs '${CURRENT_PACKAGES_DIR}/lib/libed.a' ed_combined.o
-    "
-    WORKING_DIRECTORY "${ED_BUILD_REL}"
-    LOGNAME "combine-${TARGET_TRIPLET}"
-)
-
-# Suppress vcpkg post-build warnings — we only produce release libraries
-# and ed has no public headers (it's a tool, not a library)
-set(VCPKG_POLICY_MISMATCHED_NUMBER_OF_BINARIES enabled)
-set(VCPKG_POLICY_EMPTY_INCLUDE_FOLDER enabled)
-
-# Install copyright
-vcpkg_install_copyright(FILE_LIST "${SOURCE_PATH}/COPYING")
+busyq_finalize_port()

@@ -120,9 +120,16 @@ static const int num_applets = sizeof(applet_reg) / sizeof(applet_reg[0]);
 
 static const char *find_applet_module(const char *name)
 {
-    for (int i = 0; i < num_applets; i++) {
-        if (strcmp(applet_reg[i].command, name) == 0)
-            return applet_reg[i].module;
+    int lo = 0, hi = num_applets - 1;
+    while (lo <= hi) {
+        int mid = lo + (hi - lo) / 2;
+        int cmp = strcmp(name, applet_reg[mid].command);
+        if (cmp == 0)
+            return applet_reg[mid].module;
+        if (cmp < 0)
+            hi = mid - 1;
+        else
+            lo = mid + 1;
     }
     return NULL;
 }

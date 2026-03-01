@@ -1,4 +1,5 @@
 include("${CMAKE_CURRENT_LIST_DIR}/../../scripts/cmake/busyq_alpine_helpers.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/../../scripts/cmake/busyq_symbol_helpers.cmake")
 
 busyq_alpine_source(
     PORT_DIR "${CMAKE_CURRENT_LIST_DIR}"
@@ -74,8 +75,4 @@ file(INSTALL
     DESTINATION "${CURRENT_PACKAGES_DIR}/include"
 )
 
-# Suppress vcpkg post-build warnings — we only produce release libraries
-set(VCPKG_POLICY_MISMATCHED_NUMBER_OF_BINARIES enabled)
-
-# Install copyright
-vcpkg_install_copyright(FILE_LIST "${SOURCE_PATH}/COPYING")
+busyq_finalize_port()

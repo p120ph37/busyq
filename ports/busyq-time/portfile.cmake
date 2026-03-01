@@ -47,8 +47,6 @@ busyq_post_build_rename_main(time "${_prefix_h}"
 
 set(TIME_BUILD_REL "${CURRENT_BUILDTREES_DIR}/${TARGET_TRIPLET}-rel")
 
-file(MAKE_DIRECTORY "${CURRENT_PACKAGES_DIR}/lib")
-
 # --- Symbol isolation ---
 # GNU time embeds gnulib, so we need full symbol isolation.
 
@@ -61,27 +59,6 @@ if(NOT TIME_OBJS)
     message(FATAL_ERROR "No time object files found in ${TIME_BUILD_REL}")
 endif()
 
-vcpkg_execute_required_process(
-    COMMAND ar rcs "${TIME_BUILD_REL}/lib_raw.a" ${TIME_OBJS}
-    WORKING_DIRECTORY "${TIME_BUILD_REL}"
-    LOGNAME "ar-raw-${TARGET_TRIPLET}"
-)
+busyq_package_objects(libtime.a "${TIME_BUILD_REL}" OBJECTS ${TIME_OBJS})
 
-# Combine objects and package (no objcopy — compile-time prefix preserves bitcode)
-vcpkg_execute_required_process(
-    COMMAND sh -c "
-        set -e
-        ld -r --whole-archive lib_raw.a -o combined.o \
-            -z muldefs 2>/dev/null \
-        || ld -r --whole-archive lib_raw.a -o combined.o
-        llvm-objcopy --wildcard --keep-global-symbol='*_main' combined.o
-        ar rcs '${CURRENT_PACKAGES_DIR}/lib/libtime.a' combined.o
-    "
-    WORKING_DIRECTORY "${TIME_BUILD_REL}"
-    LOGNAME "combine-${TARGET_TRIPLET}"
-)
-
-set(VCPKG_POLICY_MISMATCHED_NUMBER_OF_BINARIES enabled)
-set(VCPKG_POLICY_EMPTY_INCLUDE_FOLDER enabled)
-
-vcpkg_install_copyright(FILE_LIST "${SOURCE_PATH}/COPYING")
+busyq_finalize_port()

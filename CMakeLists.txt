@@ -30,181 +30,107 @@ set(BUSYQ_APPLETS "" CACHE STRING
     "Semicolon-separated applet names to include (empty string = all)")
 
 # =====================================================================
-# Find libraries installed by our overlay ports
-# These are found via CMAKE_PREFIX_PATH set by vcpkg toolchain
+# Find and collect component libraries from overlay ports
+#
+# Each component is found via find_library and appended to
+# BUSYQ_COMPONENT_LIBS.  All components end up in one merged archive
+# (libbusyq.a via MRI script), so ordering here is for readability.
 # =====================================================================
-
-# Bash libraries
-find_library(LIB_BASH bash PATHS "${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/lib" NO_DEFAULT_PATH)
-find_library(LIB_BUILTINS builtins PATHS "${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/lib" NO_DEFAULT_PATH)
-find_library(LIB_READLINE readline PATHS "${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/lib" NO_DEFAULT_PATH)
-find_library(LIB_HISTORY history PATHS "${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/lib" NO_DEFAULT_PATH)
-find_library(LIB_GLOB glob PATHS "${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/lib" NO_DEFAULT_PATH)
-find_library(LIB_TILDE tilde PATHS "${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/lib" NO_DEFAULT_PATH)
-find_library(LIB_SH sh PATHS "${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/lib" NO_DEFAULT_PATH)
-
-# Phase 1: Coreutils (single-binary multi-call)
-find_library(LIB_COREUTILS coreutils PATHS "${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/lib" NO_DEFAULT_PATH)
-
-# Phase 2: Text processing
-find_library(LIB_GAWK gawk PATHS "${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/lib" NO_DEFAULT_PATH)
-find_library(LIB_SED sed PATHS "${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/lib" NO_DEFAULT_PATH)
-find_library(LIB_GREP grep PATHS "${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/lib" NO_DEFAULT_PATH)
-find_library(LIB_DIFFUTILS diffutils PATHS "${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/lib" NO_DEFAULT_PATH)
-find_library(LIB_FINDUTILS findutils PATHS "${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/lib" NO_DEFAULT_PATH)
-find_library(LIB_ED ed PATHS "${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/lib" NO_DEFAULT_PATH)
-find_library(LIB_PATCH patch PATHS "${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/lib" NO_DEFAULT_PATH)
-
-# Phase 3: Archival
-find_library(LIB_TAR tar PATHS "${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/lib" NO_DEFAULT_PATH)
-find_library(LIB_GZIP gzip PATHS "${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/lib" NO_DEFAULT_PATH)
-find_library(LIB_BZIP2_TOOL bzip2 PATHS "${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/lib" NO_DEFAULT_PATH)
-find_library(LIB_XZ xz PATHS "${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/lib" NO_DEFAULT_PATH)
-find_library(LIB_CPIO cpio PATHS "${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/lib" NO_DEFAULT_PATH)
-find_library(LIB_LZOP lzop PATHS "${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/lib" NO_DEFAULT_PATH)
-find_library(LIB_ZIP zip PATHS "${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/lib" NO_DEFAULT_PATH)
-find_library(LIB_UNZIP unzip PATHS "${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/lib" NO_DEFAULT_PATH)
-
-# Phase 4: Small standalone tools
-find_library(LIB_BC bc PATHS "${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/lib" NO_DEFAULT_PATH)
-find_library(LIB_LESS less PATHS "${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/lib" NO_DEFAULT_PATH)
-find_library(LIB_STRINGS strings PATHS "${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/lib" NO_DEFAULT_PATH)
-find_library(LIB_TIME time PATHS "${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/lib" NO_DEFAULT_PATH)
-find_library(LIB_DOS2UNIX dos2unix PATHS "${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/lib" NO_DEFAULT_PATH)
-find_library(LIB_SHARUTILS sharutils PATHS "${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/lib" NO_DEFAULT_PATH)
-find_library(LIB_TSET tset PATHS "${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/lib" NO_DEFAULT_PATH)
-find_library(LIB_WHICH which PATHS "${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/lib" NO_DEFAULT_PATH)
-
-# Phase 5: Networking
-find_library(LIB_WGET wget PATHS "${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/lib" NO_DEFAULT_PATH)
-find_library(LIB_NC nc PATHS "${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/lib" NO_DEFAULT_PATH)
-find_library(LIB_PING ping PATHS "${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/lib" NO_DEFAULT_PATH)
-find_library(LIB_HOSTNAME hostname PATHS "${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/lib" NO_DEFAULT_PATH)
-find_library(LIB_WHOIS whois PATHS "${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/lib" NO_DEFAULT_PATH)
-
-# Phase 6: Process utilities
-find_library(LIB_PROCPS procps PATHS "${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/lib" NO_DEFAULT_PATH)
-find_library(LIB_PSMISC psmisc PATHS "${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/lib" NO_DEFAULT_PATH)
-find_library(LIB_LSOF lsof PATHS "${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/lib" NO_DEFAULT_PATH)
-
-# Curl (library + tool main)
-find_library(LIB_CURL curl PATHS "${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/lib" NO_DEFAULT_PATH)
-find_library(LIB_CURLMAIN curlmain PATHS "${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/lib" NO_DEFAULT_PATH)
-
-# Curl dependencies (compression + HTTP/2)
-find_library(LIB_NGHTTP2 nghttp2 PATHS "${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/lib" NO_DEFAULT_PATH)
-find_library(LIB_Z z PATHS "${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/lib" NO_DEFAULT_PATH)
-find_library(LIB_BROTLIDEC brotlidec PATHS "${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/lib" NO_DEFAULT_PATH)
-find_library(LIB_BROTLICOMMON brotlicommon PATHS "${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/lib" NO_DEFAULT_PATH)
-find_library(LIB_ZSTD zstd PATHS "${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/lib" NO_DEFAULT_PATH)
-
-# jq (library + tool main)
-find_library(LIB_JQ jq PATHS "${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/lib" NO_DEFAULT_PATH)
-find_library(LIB_JQMAIN jqmain PATHS "${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/lib" NO_DEFAULT_PATH)
-
-# Oniguruma (regex library for jq)
-find_library(LIB_ONIG onig PATHS "${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/lib" NO_DEFAULT_PATH)
-
-# lzo (compression library for lzop)
-find_library(LIB_LZO lzo2 PATHS "${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/lib" NO_DEFAULT_PATH)
-
-# ncurses (terminal handling for bash/readline, less, top, pstree)
-find_library(LIB_NCURSES ncursesw PATHS "${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/lib" NO_DEFAULT_PATH)
-if(NOT LIB_NCURSES)
-    find_library(LIB_NCURSES ncurses PATHS "${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/lib" NO_DEFAULT_PATH)
-endif()
-
-# SSL: mbedtls libraries (conditional)
-if(BUSYQ_SSL)
-    find_library(LIB_MBEDTLS mbedtls PATHS "${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/lib" NO_DEFAULT_PATH)
-    find_library(LIB_MBEDX509 mbedx509 PATHS "${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/lib" NO_DEFAULT_PATH)
-    find_library(LIB_MBEDCRYPTO mbedcrypto PATHS "${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/lib" NO_DEFAULT_PATH)
-endif()
-
-# =====================================================================
-# Assemble the ordered list of component libraries
-# Link order matters for static libraries.
-# =====================================================================
+set(_LIB_DIR "${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/lib")
 set(BUSYQ_COMPONENT_LIBS "")
 
-# Bash
-foreach(_lib LIB_BASH LIB_BUILTINS LIB_READLINE LIB_HISTORY LIB_GLOB LIB_TILDE LIB_SH)
-    if(${_lib})
-        list(APPEND BUSYQ_COMPONENT_LIBS ${${_lib}})
+# Helper: find a library and append to component list if found
+macro(_busyq_find _var _name)
+    find_library(${_var} ${_name} PATHS "${_LIB_DIR}" NO_DEFAULT_PATH)
+    if(${_var})
+        list(APPEND BUSYQ_COMPONENT_LIBS ${${_var}})
     endif()
-endforeach()
+endmacro()
+
+# Bash
+_busyq_find(LIB_BASH       bash)
+_busyq_find(LIB_BUILTINS   builtins)
+_busyq_find(LIB_READLINE   readline)
+_busyq_find(LIB_HISTORY    history)
+_busyq_find(LIB_GLOB       glob)
+_busyq_find(LIB_TILDE      tilde)
+_busyq_find(LIB_SH         sh)
 
 # Coreutils
-if(LIB_COREUTILS)
-    list(APPEND BUSYQ_COMPONENT_LIBS ${LIB_COREUTILS})
+_busyq_find(LIB_COREUTILS  coreutils)
+
+# Text processing
+_busyq_find(LIB_GAWK       gawk)
+_busyq_find(LIB_SED        sed)
+_busyq_find(LIB_GREP       grep)
+_busyq_find(LIB_DIFFUTILS  diffutils)
+_busyq_find(LIB_FINDUTILS  findutils)
+_busyq_find(LIB_ED         ed)
+_busyq_find(LIB_PATCH      patch)
+
+# Archival
+_busyq_find(LIB_TAR        tar)
+_busyq_find(LIB_GZIP       gzip)
+_busyq_find(LIB_BZIP2_TOOL bzip2)
+_busyq_find(LIB_XZ         xz)
+_busyq_find(LIB_CPIO       cpio)
+_busyq_find(LIB_LZOP       lzop)
+_busyq_find(LIB_ZIP        zip)
+_busyq_find(LIB_UNZIP      unzip)
+
+# Small standalone tools
+_busyq_find(LIB_BC         bc)
+_busyq_find(LIB_LESS       less)
+_busyq_find(LIB_STRINGS    strings)
+_busyq_find(LIB_TIME       time)
+_busyq_find(LIB_DOS2UNIX   dos2unix)
+_busyq_find(LIB_SHARUTILS  sharutils)
+_busyq_find(LIB_TSET       tset)
+_busyq_find(LIB_WHICH      which)
+
+# Networking
+_busyq_find(LIB_WGET       wget)
+_busyq_find(LIB_NC         nc)
+_busyq_find(LIB_PING       ping)
+_busyq_find(LIB_HOSTNAME   hostname)
+_busyq_find(LIB_WHOIS      whois)
+
+# Process utilities
+_busyq_find(LIB_PROCPS     procps)
+_busyq_find(LIB_PSMISC     psmisc)
+_busyq_find(LIB_LSOF       lsof)
+
+# Curl + dependencies
+_busyq_find(LIB_CURLMAIN   curlmain)
+_busyq_find(LIB_CURL       curl)
+_busyq_find(LIB_NGHTTP2    nghttp2)
+_busyq_find(LIB_Z          z)
+_busyq_find(LIB_BROTLIDEC  brotlidec)
+_busyq_find(LIB_BROTLICOMMON brotlicommon)
+_busyq_find(LIB_ZSTD       zstd)
+
+# jq + dependencies
+_busyq_find(LIB_JQMAIN     jqmain)
+_busyq_find(LIB_JQ         jq)
+_busyq_find(LIB_ONIG       onig)
+
+# Shared dependencies
+_busyq_find(LIB_LZO        lzo2)
+
+# ncurses (try wide-char variant first)
+find_library(LIB_NCURSES ncursesw PATHS "${_LIB_DIR}" NO_DEFAULT_PATH)
+if(NOT LIB_NCURSES)
+    find_library(LIB_NCURSES ncurses PATHS "${_LIB_DIR}" NO_DEFAULT_PATH)
 endif()
-
-# Phase 2: Text processing
-foreach(_lib LIB_GAWK LIB_SED LIB_GREP LIB_DIFFUTILS LIB_FINDUTILS LIB_ED LIB_PATCH)
-    if(${_lib})
-        list(APPEND BUSYQ_COMPONENT_LIBS ${${_lib}})
-    endif()
-endforeach()
-
-# Phase 3: Archival
-foreach(_lib LIB_TAR LIB_GZIP LIB_BZIP2_TOOL LIB_XZ LIB_CPIO LIB_LZOP LIB_ZIP LIB_UNZIP)
-    if(${_lib})
-        list(APPEND BUSYQ_COMPONENT_LIBS ${${_lib}})
-    endif()
-endforeach()
-
-# Phase 4: Small standalone tools
-foreach(_lib LIB_BC LIB_LESS LIB_STRINGS LIB_TIME LIB_DOS2UNIX LIB_SHARUTILS LIB_TSET LIB_WHICH)
-    if(${_lib})
-        list(APPEND BUSYQ_COMPONENT_LIBS ${${_lib}})
-    endif()
-endforeach()
-
-# Phase 5: Networking
-foreach(_lib LIB_WGET LIB_NC LIB_PING LIB_HOSTNAME LIB_WHOIS)
-    if(${_lib})
-        list(APPEND BUSYQ_COMPONENT_LIBS ${${_lib}})
-    endif()
-endforeach()
-
-# Phase 6: Process utilities
-foreach(_lib LIB_PROCPS LIB_PSMISC LIB_LSOF)
-    if(${_lib})
-        list(APPEND BUSYQ_COMPONENT_LIBS ${${_lib}})
-    endif()
-endforeach()
-
-# Curl
-foreach(_lib LIB_CURLMAIN LIB_CURL LIB_NGHTTP2 LIB_Z LIB_BROTLIDEC LIB_BROTLICOMMON LIB_ZSTD)
-    if(${_lib})
-        list(APPEND BUSYQ_COMPONENT_LIBS ${${_lib}})
-    endif()
-endforeach()
-
-# jq
-foreach(_lib LIB_JQMAIN LIB_JQ LIB_ONIG)
-    if(${_lib})
-        list(APPEND BUSYQ_COMPONENT_LIBS ${${_lib}})
-    endif()
-endforeach()
-
-# lzo (for lzop)
-if(LIB_LZO)
-    list(APPEND BUSYQ_COMPONENT_LIBS ${LIB_LZO})
-endif()
-
-# ncurses
 if(LIB_NCURSES)
     list(APPEND BUSYQ_COMPONENT_LIBS ${LIB_NCURSES})
 endif()
 
-# SSL
+# SSL (conditional)
 if(BUSYQ_SSL)
-    foreach(_lib LIB_MBEDTLS LIB_MBEDX509 LIB_MBEDCRYPTO)
-        if(${_lib})
-            list(APPEND BUSYQ_COMPONENT_LIBS ${${_lib}})
-        endif()
-    endforeach()
+    _busyq_find(LIB_MBEDTLS    mbedtls)
+    _busyq_find(LIB_MBEDX509   mbedx509)
+    _busyq_find(LIB_MBEDCRYPTO mbedcrypto)
 endif()
 
 # =====================================================================

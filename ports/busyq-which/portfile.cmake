@@ -49,11 +49,8 @@ busyq_post_build_rename_main(which "${_prefix_h}" "${SOURCE_PATH}/which.c")
 
 set(WHICH_BUILD_REL "${CURRENT_BUILDTREES_DIR}/${TARGET_TRIPLET}-rel")
 
-file(MAKE_DIRECTORY "${CURRENT_PACKAGES_DIR}/lib")
-
 # --- Symbol isolation ---
 # GNU which is simple but may embed gnulib, so apply full isolation.
-
 
 # Collect all object files from the build
 file(GLOB WHICH_OBJS
@@ -66,27 +63,6 @@ if(NOT WHICH_OBJS)
     message(FATAL_ERROR "No object files found in ${WHICH_BUILD_REL}")
 endif()
 
-# Pack into temporary archive (needed for ld -r --whole-archive)
-vcpkg_execute_required_process(
-    COMMAND ar rcs "${WHICH_BUILD_REL}/libwhich_raw.a" ${WHICH_OBJS}
-    WORKING_DIRECTORY "${WHICH_BUILD_REL}"
-    LOGNAME "ar-raw-${TARGET_TRIPLET}"
-)
-# Combine objects and package (no objcopy — compile-time prefix preserves bitcode)
-vcpkg_execute_required_process(
-    COMMAND sh -c "
-        set -e
-        ld -r --whole-archive libwhich_raw.a -o combined.o \
-            -z muldefs 2>/dev/null \
-        || ld -r --whole-archive libwhich_raw.a -o combined.o
-        llvm-objcopy --wildcard --keep-global-symbol='*_main' combined.o
-        ar rcs '${CURRENT_PACKAGES_DIR}/lib/libwhich.a' combined.o
-    "
-    WORKING_DIRECTORY "${WHICH_BUILD_REL}"
-    LOGNAME "combine-${TARGET_TRIPLET}"
-)
+busyq_package_objects(libwhich.a "${WHICH_BUILD_REL}" OBJECTS ${WHICH_OBJS})
 
-set(VCPKG_POLICY_MISMATCHED_NUMBER_OF_BINARIES enabled)
-set(VCPKG_POLICY_EMPTY_INCLUDE_FOLDER enabled)
-
-vcpkg_install_copyright(FILE_LIST "${SOURCE_PATH}/COPYING")
+busyq_finalize_port()

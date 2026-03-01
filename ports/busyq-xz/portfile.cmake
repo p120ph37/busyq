@@ -42,8 +42,6 @@ busyq_post_build_rename_main(xz "${_prefix_h}" "${SOURCE_PATH}/src/xz/main.c")
 
 set(XZ_BUILD_REL "${CURRENT_BUILDTREES_DIR}/${TARGET_TRIPLET}-rel")
 
-file(MAKE_DIRECTORY "${CURRENT_PACKAGES_DIR}/lib")
-
 # --- Symbol isolation ---
 # Collect all .o files from xz build (src/xz/ for the tool, src/liblzma/ for the library,
 # src/common/ for shared code, lib/ for gnulib)
@@ -59,31 +57,6 @@ if(NOT XZ_OBJS)
     message(FATAL_ERROR "No xz object files found in ${XZ_BUILD_REL}")
 endif()
 
-# Pack into temporary archive
-vcpkg_execute_required_process(
-    COMMAND ar rcs "${XZ_BUILD_REL}/lib_raw.a" ${XZ_OBJS}
-    WORKING_DIRECTORY "${XZ_BUILD_REL}"
-    LOGNAME "ar-raw-${TARGET_TRIPLET}"
-)
+busyq_package_objects(libxz.a "${XZ_BUILD_REL}" OBJECTS ${XZ_OBJS})
 
-# Combine, prefix, unprefix, rename
-# Combine objects and package (no objcopy — compile-time prefix preserves bitcode)
-vcpkg_execute_required_process(
-    COMMAND sh -c "
-        set -e
-        ld -r --whole-archive lib_raw.a -o combined.o \
-            -z muldefs 2>/dev/null \
-        || ld -r --whole-archive lib_raw.a -o combined.o
-        llvm-objcopy --wildcard --keep-global-symbol='*_main' combined.o
-        ar rcs '${CURRENT_PACKAGES_DIR}/lib/libxz.a' combined.o
-    "
-    WORKING_DIRECTORY "${XZ_BUILD_REL}"
-    LOGNAME "combine-${TARGET_TRIPLET}"
-)
-
-# Suppress vcpkg post-build warnings
-set(VCPKG_POLICY_MISMATCHED_NUMBER_OF_BINARIES enabled)
-set(VCPKG_POLICY_EMPTY_INCLUDE_FOLDER enabled)
-
-# Install copyright
-vcpkg_install_copyright(FILE_LIST "${SOURCE_PATH}/COPYING")
+busyq_finalize_port()

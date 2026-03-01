@@ -1,4 +1,5 @@
 # busyq_symbol_helpers.cmake — LTO-safe compile-time symbol prefixing
+#                              and object packaging helpers
 #
 # Replaces objcopy --prefix-symbols (which destroys LLVM bitcode) with
 # a compile-time approach using -include <prefix_header>.  The header
@@ -14,6 +15,10 @@
 #   vcpkg_build_make(OPTIONS "CPPFLAGS=-include ${_prefix_h}")
 #
 #   busyq_post_build_rename_main(gawk "${_prefix_h}" "${SOURCE_PATH}/main.c")
+#
+#   busyq_package_objects(libgawk.a "${BUILD_REL}" OBJECTS ${GAWK_OBJS})
+#
+#   busyq_finalize_port()
 #
 # The main() rename is done AFTER the build because renaming it before
 # would cause the link step to fail (undefined symbol: main).
@@ -152,4 +157,73 @@ function(busyq_post_build_rename_main _tool _prefix_h)
         WORKING_DIRECTORY "${_work_dir}"
         LOGNAME "rename-main-${_tool}-${TARGET_TRIPLET}"
     )
+endfunction()
+
+# busyq_package_objects(<output_lib> <working_dir> OBJECTS <obj1> [<obj2> ...]
+#                       [KEEP_GLOBAL <pattern>])
+#
+# Combines object files into a single static library with all internal
+# symbols localized (hidden).  Only symbols matching KEEP_GLOBAL remain
+# global, preventing cross-port symbol collisions at final link time.
+#
+# Steps:
+#   1. ar rcs → temporary raw archive
+#   2. ld -r --whole-archive → single relocatable object
+#   3. llvm-objcopy --keep-global-symbol → localize internals
+#   4. ar rcs → final library in ${CURRENT_PACKAGES_DIR}/lib/
+#
+# KEEP_GLOBAL defaults to '*_main'.  Coreutils passes
+# 'single_binary_main_*' instead.
+function(busyq_package_objects _output_lib _working_dir)
+    cmake_parse_arguments(PARSE_ARGV 2 ARG "" "KEEP_GLOBAL" "OBJECTS")
+
+    if(NOT ARG_OBJECTS)
+        message(FATAL_ERROR "busyq_package_objects(${_output_lib}): OBJECTS list is empty")
+    endif()
+
+    if(NOT ARG_KEEP_GLOBAL)
+        set(ARG_KEEP_GLOBAL "*_main")
+    endif()
+
+    file(MAKE_DIRECTORY "${CURRENT_PACKAGES_DIR}/lib")
+
+    vcpkg_execute_required_process(
+        COMMAND ar rcs "${_working_dir}/lib_raw.a" ${ARG_OBJECTS}
+        WORKING_DIRECTORY "${_working_dir}"
+        LOGNAME "ar-raw-${PORT}-${TARGET_TRIPLET}"
+    )
+
+    vcpkg_execute_required_process(
+        COMMAND sh -c "
+            set -e
+            ld -r --whole-archive lib_raw.a -o combined.o \
+                -z muldefs 2>/dev/null \
+            || ld -r --whole-archive lib_raw.a -o combined.o
+            llvm-objcopy --wildcard --keep-global-symbol='${ARG_KEEP_GLOBAL}' combined.o
+            ar rcs '${CURRENT_PACKAGES_DIR}/lib/${_output_lib}' combined.o
+        "
+        WORKING_DIRECTORY "${_working_dir}"
+        LOGNAME "combine-${PORT}-${TARGET_TRIPLET}"
+    )
+endfunction()
+
+# busyq_finalize_port([COPYRIGHT <file>])
+#
+# Standard tail-end boilerplate for busyq tool ports:
+#   - Suppresses vcpkg warnings about mismatched binary counts and empty
+#     include folders (tools produce no headers or debug artifacts)
+#   - Installs the copyright/license file
+#
+# COPYRIGHT defaults to ${SOURCE_PATH}/COPYING.
+function(busyq_finalize_port)
+    cmake_parse_arguments(PARSE_ARGV 0 ARG "" "COPYRIGHT" "")
+
+    set(VCPKG_POLICY_MISMATCHED_NUMBER_OF_BINARIES enabled PARENT_SCOPE)
+    set(VCPKG_POLICY_EMPTY_INCLUDE_FOLDER enabled PARENT_SCOPE)
+
+    if(ARG_COPYRIGHT)
+        vcpkg_install_copyright(FILE_LIST "${ARG_COPYRIGHT}")
+    else()
+        vcpkg_install_copyright(FILE_LIST "${SOURCE_PATH}/COPYING")
+    endif()
 endfunction()

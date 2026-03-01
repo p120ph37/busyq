@@ -47,13 +47,6 @@ busyq_post_build_rename_main(dc "${_prefix_h}"
 
 set(BC_BUILD_REL "${CURRENT_BUILDTREES_DIR}/${TARGET_TRIPLET}-rel")
 
-file(MAKE_DIRECTORY "${CURRENT_PACKAGES_DIR}/lib")
-
-# --- Symbol isolation ---
-# bc and dc have separate main() functions. We must rename them before
-# combining so we can expose both bc_main and dc_main entry points.
-
-# Step 1: Collect object files from bc and dc subdirectories
 file(GLOB BC_BC_OBJS "${BC_BUILD_REL}/bc/*.o")
 file(GLOB BC_DC_OBJS "${BC_BUILD_REL}/dc/*.o")
 file(GLOB BC_LIB_OBJS "${BC_BUILD_REL}/lib/*.o")
@@ -64,32 +57,6 @@ if(NOT BC_ALL_OBJS)
     message(FATAL_ERROR "No bc object files found in ${BC_BUILD_REL}")
 endif()
 
-# Step 1a: Pack into temporary archive
-vcpkg_execute_required_process(
-    COMMAND ar rcs "${BC_BUILD_REL}/libbc_raw.a" ${BC_ALL_OBJS}
-    WORKING_DIRECTORY "${BC_BUILD_REL}"
-    LOGNAME "ar-raw-${TARGET_TRIPLET}"
-)
+busyq_package_objects(libbc.a "${BC_BUILD_REL}" OBJECTS ${BC_ALL_OBJS})
 
-# Combine objects and package (mains already renamed at source level)
-vcpkg_execute_required_process(
-    COMMAND sh -c "
-        set -e
-
-        # Combine all objects into one relocatable .o
-        ld -r --whole-archive libbc_raw.a -o combined.o \
-            -z muldefs 2>/dev/null \
-        || ld -r --whole-archive libbc_raw.a -o combined.o
-        llvm-objcopy --wildcard --keep-global-symbol='*_main' combined.o
-
-        # Package into final archive
-        ar rcs '${CURRENT_PACKAGES_DIR}/lib/libbc.a' combined.o
-    "
-    WORKING_DIRECTORY "${BC_BUILD_REL}"
-    LOGNAME "combine-${TARGET_TRIPLET}"
-)
-
-set(VCPKG_POLICY_MISMATCHED_NUMBER_OF_BINARIES enabled)
-set(VCPKG_POLICY_EMPTY_INCLUDE_FOLDER enabled)
-
-vcpkg_install_copyright(FILE_LIST "${SOURCE_PATH}/COPYING")
+busyq_finalize_port()

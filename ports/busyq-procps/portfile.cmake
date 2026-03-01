@@ -74,21 +74,6 @@ endforeach()
 
 set(PROCPS_BUILD_REL "${CURRENT_BUILDTREES_DIR}/${TARGET_TRIPLET}-rel")
 
-file(MAKE_DIRECTORY "${CURRENT_PACKAGES_DIR}/lib")
-
-# --- Symbol isolation ---
-# procps-ng has multiple tool binaries each with their own main(), plus a
-# shared libprocps library. Strategy:
-#
-# 1. Collect all .o files from library and tool sources
-# 2. For each tool .o that defines main(), rename main → <basename>_main_orig
-# 3. Combine into one relocatable object with ld -r
-# 4. Record undefined symbols (external deps: libc, ncurses, etc.)
-# 5. Prefix ALL symbols with procps_
-# 6. Unprefix external deps so libc/ncurses calls work
-# 7. Rename procps_<tool>_main_orig → <tool>_main for each tool
-# 8. Package into libprocps.a
-
 file(GLOB_RECURSE PROCPS_OBJS
     "${PROCPS_BUILD_REL}/src/*.o"
     "${PROCPS_BUILD_REL}/library/*.o"
@@ -101,31 +86,6 @@ if(NOT PROCPS_OBJS)
     message(FATAL_ERROR "No procps-ng object files found in ${PROCPS_BUILD_REL}")
 endif()
 
-vcpkg_execute_required_process(
-    COMMAND ar rcs "${PROCPS_BUILD_REL}/libprocps_raw.a" ${PROCPS_OBJS}
-    WORKING_DIRECTORY "${PROCPS_BUILD_REL}"
-    LOGNAME "ar-raw-${TARGET_TRIPLET}"
-)
+busyq_package_objects(libprocps.a "${PROCPS_BUILD_REL}" OBJECTS ${PROCPS_OBJS})
 
-# Combine objects and package (mains already renamed at source level)
-vcpkg_execute_required_process(
-    COMMAND sh -c "
-        set -e
-
-        # Combine all objects into one relocatable .o
-        ld -r --whole-archive libprocps_raw.a -o combined.o \
-            -z muldefs 2>/dev/null \
-        || ld -r --whole-archive libprocps_raw.a -o combined.o
-        llvm-objcopy --wildcard --keep-global-symbol='*_main' combined.o
-
-        # Package into final archive
-        ar rcs '${CURRENT_PACKAGES_DIR}/lib/libprocps.a' combined.o
-    "
-    WORKING_DIRECTORY "${PROCPS_BUILD_REL}"
-    LOGNAME "combine-${TARGET_TRIPLET}"
-)
-
-set(VCPKG_POLICY_MISMATCHED_NUMBER_OF_BINARIES enabled)
-set(VCPKG_POLICY_EMPTY_INCLUDE_FOLDER enabled)
-
-vcpkg_install_copyright(FILE_LIST "${SOURCE_PATH}/COPYING")
+busyq_finalize_port()

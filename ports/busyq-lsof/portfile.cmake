@@ -46,19 +46,8 @@ busyq_post_build_rename_main(lsof "${_prefix_h}"
 
 set(LSOF_BUILD_REL "${CURRENT_BUILDTREES_DIR}/${TARGET_TRIPLET}-rel")
 
-file(MAKE_DIRECTORY "${CURRENT_PACKAGES_DIR}/lib")
-
 # --- Symbol isolation ---
-# lsof is a single-binary tool with one main(). Strategy:
-#
-# 1. Collect all .o files from the build
-# 2. Combine into one relocatable object with ld -r
-# 3. Record undefined symbols (external deps: libc, etc.)
-# 4. Prefix ALL symbols with lsof_
-# 5. Unprefix external deps so libc calls work
-# 6. Rename lsof_main → lsof_main (our entry point)
-# 7. Package into liblsof.a
-
+# lsof is a single-binary tool with one main().
 
 # Collect all object files from the build
 file(GLOB_RECURSE LSOF_OBJS
@@ -71,30 +60,6 @@ if(NOT LSOF_OBJS)
     message(FATAL_ERROR "No object files found in ${LSOF_BUILD_REL}")
 endif()
 
-# Pack into temporary archive (needed for ld -r --whole-archive)
-vcpkg_execute_required_process(
-    COMMAND ar rcs "${LSOF_BUILD_REL}/liblsof_raw.a" ${LSOF_OBJS}
-    WORKING_DIRECTORY "${LSOF_BUILD_REL}"
-    LOGNAME "ar-raw-${TARGET_TRIPLET}"
-)
-# Combine objects and package (no objcopy — compile-time prefix preserves bitcode)
-vcpkg_execute_required_process(
-    COMMAND sh -c "
-        set -e
-        ld -r --whole-archive liblsof_raw.a -o combined.o \
-            -z muldefs 2>/dev/null \
-        || ld -r --whole-archive liblsof_raw.a -o combined.o
-        llvm-objcopy --wildcard --keep-global-symbol='*_main' combined.o
-        ar rcs '${CURRENT_PACKAGES_DIR}/lib/liblsof.a' combined.o
-    "
-    WORKING_DIRECTORY "${LSOF_BUILD_REL}"
-    LOGNAME "combine-${TARGET_TRIPLET}"
-)
+busyq_package_objects(liblsof.a "${LSOF_BUILD_REL}" OBJECTS ${LSOF_OBJS})
 
-# Suppress vcpkg post-build warnings — we only produce release libraries
-# and lsof has no public headers needed by busyq (it's a tool, not a library API)
-set(VCPKG_POLICY_MISMATCHED_NUMBER_OF_BINARIES enabled)
-set(VCPKG_POLICY_EMPTY_INCLUDE_FOLDER enabled)
-
-# Install copyright
-vcpkg_install_copyright(FILE_LIST "${SOURCE_PATH}/COPYING")
+busyq_finalize_port()

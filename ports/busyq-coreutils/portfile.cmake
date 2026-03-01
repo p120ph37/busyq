@@ -1,4 +1,5 @@
 include("${CMAKE_CURRENT_LIST_DIR}/../../scripts/cmake/busyq_alpine_helpers.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/../../scripts/cmake/busyq_symbol_helpers.cmake")
 
 busyq_alpine_source(
     PORT_DIR "${CMAKE_CURRENT_LIST_DIR}"
@@ -112,8 +113,6 @@ vcpkg_build_make(
 
 set(CU_BUILD_REL "${CURRENT_BUILDTREES_DIR}/${TARGET_TRIPLET}-rel")
 
-file(MAKE_DIRECTORY "${CURRENT_PACKAGES_DIR}/lib")
-
 # --- Collect objects and package ---
 #
 # Collect all .o files from the build.  We EXCLUDE the coreutils dispatcher
@@ -140,39 +139,6 @@ if(NOT CU_OBJS)
     message(FATAL_ERROR "No coreutils object files found in ${CU_BUILD_REL}")
 endif()
 
-# Pack into temporary archive (needed for ld -r --whole-archive)
-vcpkg_execute_required_process(
-    COMMAND ar rcs "${CU_BUILD_REL}/libcoreutils_raw.a" ${CU_OBJS}
-    WORKING_DIRECTORY "${CU_BUILD_REL}"
-    LOGNAME "ar-raw-${TARGET_TRIPLET}"
-)
+busyq_package_objects(libcoreutils.a "${CU_BUILD_REL}" OBJECTS ${CU_OBJS} KEEP_GLOBAL "single_binary_main_*")
 
-# Combine all objects with ld -r.  In the alpine-clang-vcpkg container,
-# ld is aliased to lld which preserves LLVM bitcode sections.  This is
-# the key advantage over the old objcopy approach: the combined object
-# retains full bitcode, enabling cross-project LTO at final link time.
-#
-# -z muldefs resolves internal gnulib duplicates (e.g. xalloc_die
-# defined in both gnulib and inlined into csplit.o).
-vcpkg_execute_required_process(
-    COMMAND sh -c "
-        set -e
-        ld -r --whole-archive libcoreutils_raw.a -o coreutils_combined.o \
-            -z muldefs 2>/dev/null \
-        || ld -r --whole-archive libcoreutils_raw.a -o coreutils_combined.o
-        llvm-objcopy --wildcard --keep-global-symbol='single_binary_main_*' coreutils_combined.o
-
-        # Package into final archive (no objcopy — bitcode preserved)
-        ar rcs '${CURRENT_PACKAGES_DIR}/lib/libcoreutils.a' coreutils_combined.o
-    "
-    WORKING_DIRECTORY "${CU_BUILD_REL}"
-    LOGNAME "combine-${TARGET_TRIPLET}"
-)
-
-# Suppress vcpkg post-build warnings — we only produce release libraries
-# and coreutils has no public headers (it's a tool, not a library)
-set(VCPKG_POLICY_MISMATCHED_NUMBER_OF_BINARIES enabled)
-set(VCPKG_POLICY_EMPTY_INCLUDE_FOLDER enabled)
-
-# Install copyright
-vcpkg_install_copyright(FILE_LIST "${SOURCE_PATH}/COPYING")
+busyq_finalize_port()

@@ -173,7 +173,4 @@ vcpkg_execute_required_process(
     LOGNAME "combine-unzip-${TARGET_TRIPLET}"
 )
 
-set(VCPKG_POLICY_MISMATCHED_NUMBER_OF_BINARIES enabled)
-set(VCPKG_POLICY_EMPTY_INCLUDE_FOLDER enabled)
-
-vcpkg_install_copyright(FILE_LIST "${ZIP_SOURCE_PATH}/LICENSE")
+busyq_finalize_port(COPYRIGHT "${ZIP_SOURCE_PATH}/LICENSE")

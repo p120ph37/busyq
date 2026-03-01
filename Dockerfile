@@ -47,6 +47,12 @@ RUN apk add --no-cache \
 COPY . /src
 WORKDIR /src
 
+# Validate applets.h sort order (binary search requires lexicographic order)
+RUN grep '_BQ_IF(APPLET_' src/applets.h | grep 'APPLET(' | \
+    sed 's/.*APPLET([^,]*, //;s/,.*//' > /tmp/applet_cmds.txt \
+    && sort -C /tmp/applet_cmds.txt \
+    || (echo "ERROR: src/applets.h entries are not sorted by command name" && exit 1)
+
 # ---- Build variant 1: no SSL ----
 # CMakePresets.json configures the vcpkg toolchain file, which handles
 # package installation (via vcpkg.json manifest) during cmake configure.

@@ -7,6 +7,8 @@
 #   "dnsdomainname"  -> print DNS domain portion
 # Both are registered as separate applet entries pointing to hostname_main.
 
+include("${CMAKE_CURRENT_LIST_DIR}/../../scripts/cmake/busyq_symbol_helpers.cmake")
+
 vcpkg_cmake_get_vars(cmake_vars_file)
 include("${cmake_vars_file}")
 
@@ -36,10 +38,6 @@ vcpkg_execute_required_process(
     LOGNAME "build-hostname-${TARGET_TRIPLET}"
 )
 
-# Suppress vcpkg post-build warnings
-set(VCPKG_POLICY_MISMATCHED_NUMBER_OF_BINARIES enabled)
-set(VCPKG_POLICY_EMPTY_INCLUDE_FOLDER enabled)
-
 # Install copyright (MIT license, embedded in source)
 file(WRITE "${CURRENT_PACKAGES_DIR}/share/${PORT}/copyright"
 "MIT License
@@ -64,3 +62,5 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ")
+
+busyq_finalize_port(COPYRIGHT "${CURRENT_PACKAGES_DIR}/share/${PORT}/copyright")

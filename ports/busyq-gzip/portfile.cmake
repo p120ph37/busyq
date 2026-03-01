@@ -39,8 +39,6 @@ busyq_post_build_rename_main(gzip "${_prefix_h}" "${SOURCE_PATH}/gzip.c")
 
 set(GZ_BUILD_REL "${CURRENT_BUILDTREES_DIR}/${TARGET_TRIPLET}-rel")
 
-file(MAKE_DIRECTORY "${CURRENT_PACKAGES_DIR}/lib")
-
 # --- Symbol isolation ---
 # Collect all .o files from gzip build
 file(GLOB_RECURSE GZ_OBJS
@@ -52,31 +50,6 @@ if(NOT GZ_OBJS)
     message(FATAL_ERROR "No gzip object files found in ${GZ_BUILD_REL}")
 endif()
 
-# Pack into temporary archive
-vcpkg_execute_required_process(
-    COMMAND ar rcs "${GZ_BUILD_REL}/lib_raw.a" ${GZ_OBJS}
-    WORKING_DIRECTORY "${GZ_BUILD_REL}"
-    LOGNAME "ar-raw-${TARGET_TRIPLET}"
-)
+busyq_package_objects(libgzip.a "${GZ_BUILD_REL}" OBJECTS ${GZ_OBJS})
 
-# Combine, prefix, unprefix, rename
-# Combine objects and package (no objcopy — compile-time prefix preserves bitcode)
-vcpkg_execute_required_process(
-    COMMAND sh -c "
-        set -e
-        ld -r --whole-archive lib_raw.a -o combined.o \
-            -z muldefs 2>/dev/null \
-        || ld -r --whole-archive lib_raw.a -o combined.o
-        llvm-objcopy --wildcard --keep-global-symbol='*_main' combined.o
-        ar rcs '${CURRENT_PACKAGES_DIR}/lib/libgzip.a' combined.o
-    "
-    WORKING_DIRECTORY "${GZ_BUILD_REL}"
-    LOGNAME "combine-${TARGET_TRIPLET}"
-)
-
-# Suppress vcpkg post-build warnings
-set(VCPKG_POLICY_MISMATCHED_NUMBER_OF_BINARIES enabled)
-set(VCPKG_POLICY_EMPTY_INCLUDE_FOLDER enabled)
-
-# Install copyright
-vcpkg_install_copyright(FILE_LIST "${SOURCE_PATH}/COPYING")
+busyq_finalize_port()

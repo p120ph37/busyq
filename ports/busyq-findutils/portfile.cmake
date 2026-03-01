@@ -41,18 +41,7 @@ busyq_post_build_rename_main(xargs "${_prefix_h}"
 
 set(FU_BUILD_REL "${CURRENT_BUILDTREES_DIR}/${TARGET_TRIPLET}-rel")
 
-file(MAKE_DIRECTORY "${CURRENT_PACKAGES_DIR}/lib")
-
-# --- Symbol isolation ---
-# findutils has two separate commands (find, xargs), each with its own main().
-# Strategy:
-# 1. Rename each tool's main to a unique name BEFORE combining with ld -r
-# 2. Combine all objects + gnulib into one relocatable .o
-# 3. Prefix all symbols with fu_
-# 4. Unprefix external deps (libc, pthreads, etc.)
-# 5. Rename fu_<tool>_main_orig → <tool>_main for each command
-
-# Step 1: Collect all object files from the build
+# Collect all object files from the build
 file(GLOB_RECURSE FU_OBJS
     "${FU_BUILD_REL}/find/*.o"
     "${FU_BUILD_REL}/xargs/*.o"
@@ -65,35 +54,6 @@ if(NOT FU_OBJS)
     message(FATAL_ERROR "No findutils object files found in ${FU_BUILD_REL}")
 endif()
 
-# Step 1a: Pack objects into raw archive
-vcpkg_execute_required_process(
-    COMMAND ar rcs "${FU_BUILD_REL}/libfindutils_raw.a" ${FU_OBJS}
-    WORKING_DIRECTORY "${FU_BUILD_REL}"
-    LOGNAME "ar-raw-${TARGET_TRIPLET}"
-)
+busyq_package_objects(libfindutils.a "${FU_BUILD_REL}" OBJECTS ${FU_OBJS})
 
-# Combine objects and package (mains already renamed at source level)
-vcpkg_execute_required_process(
-    COMMAND sh -c "
-        set -e
-
-        # Combine all objects into one relocatable .o
-        ld -r --whole-archive libfindutils_raw.a -o combined.o \
-            -z muldefs 2>/dev/null \
-        || ld -r --whole-archive libfindutils_raw.a -o combined.o
-        llvm-objcopy --wildcard --keep-global-symbol='*_main' combined.o
-
-        # Package into final archive
-        ar rcs '${CURRENT_PACKAGES_DIR}/lib/libfindutils.a' combined.o
-    "
-    WORKING_DIRECTORY "${FU_BUILD_REL}"
-    LOGNAME "combine-${TARGET_TRIPLET}"
-)
-
-# Suppress vcpkg post-build warnings — we only produce release libraries
-# and findutils has no public headers (it's a tool, not a library)
-set(VCPKG_POLICY_MISMATCHED_NUMBER_OF_BINARIES enabled)
-set(VCPKG_POLICY_EMPTY_INCLUDE_FOLDER enabled)
-
-# Install copyright
-vcpkg_install_copyright(FILE_LIST "${SOURCE_PATH}/COPYING")
+busyq_finalize_port()

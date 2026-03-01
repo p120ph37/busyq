@@ -63,9 +63,4 @@ vcpkg_execute_required_process(
     LOGNAME "combine-${TARGET_TRIPLET}"
 )
 
-# Suppress vcpkg post-build warnings
-set(VCPKG_POLICY_MISMATCHED_NUMBER_OF_BINARIES enabled)
-set(VCPKG_POLICY_EMPTY_INCLUDE_FOLDER enabled)
-
-# Install copyright
-vcpkg_install_copyright(FILE_LIST "${SOURCE_PATH}/LICENSE")
+busyq_finalize_port(COPYRIGHT "${SOURCE_PATH}/LICENSE")

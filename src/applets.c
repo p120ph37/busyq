@@ -57,15 +57,21 @@ static const struct busyq_applet applets[] = {
 static const int applet_count = sizeof(applets) / sizeof(applets[0]);
 
 /* ------------------------------------------------------------------ */
-/* Lookup                                                              */
+/* Lookup — binary search (applets.h entries are sorted by command)    */
 /* ------------------------------------------------------------------ */
 
 const struct busyq_applet *busyq_find_applet(const char *name)
 {
-    int i;
-    for (i = 0; i < applet_count; i++) {
-        if (strcmp(name, applets[i].name) == 0)
-            return &applets[i];
+    int lo = 0, hi = applet_count - 1;
+    while (lo <= hi) {
+        int mid = lo + (hi - lo) / 2;
+        int cmp = strcmp(name, applets[mid].name);
+        if (cmp == 0)
+            return &applets[mid];
+        if (cmp < 0)
+            hi = mid - 1;
+        else
+            lo = mid + 1;
     }
     return NULL;
 }

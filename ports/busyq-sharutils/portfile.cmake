@@ -67,12 +67,6 @@ endforeach()
 
 set(SHAR_BUILD_REL "${CURRENT_BUILDTREES_DIR}/${TARGET_TRIPLET}-rel")
 
-file(MAKE_DIRECTORY "${CURRENT_PACKAGES_DIR}/lib")
-
-# --- Symbol isolation ---
-# sharutils has uuencode and uudecode with separate main() functions.
-# We must rename them before combining so we can expose both entry points.
-
 file(GLOB SHAR_SRC_OBJS "${SHAR_BUILD_REL}/src/*.o")
 file(GLOB SHAR_LIB_OBJS "${SHAR_BUILD_REL}/lib/*.o")
 file(GLOB SHAR_LIBOPTS_OBJS "${SHAR_BUILD_REL}/libopts/*.o")
@@ -82,31 +76,6 @@ if(NOT SHAR_ALL_OBJS)
     message(FATAL_ERROR "No sharutils object files found in ${SHAR_BUILD_REL}")
 endif()
 
-vcpkg_execute_required_process(
-    COMMAND ar rcs "${SHAR_BUILD_REL}/libshar_raw.a" ${SHAR_ALL_OBJS}
-    WORKING_DIRECTORY "${SHAR_BUILD_REL}"
-    LOGNAME "ar-raw-${TARGET_TRIPLET}"
-)
+busyq_package_objects(libsharutils.a "${SHAR_BUILD_REL}" OBJECTS ${SHAR_ALL_OBJS})
 
-# Combine objects and package (mains already renamed at source level)
-vcpkg_execute_required_process(
-    COMMAND sh -c "
-        set -e
-
-        # Combine all objects into one relocatable .o
-        ld -r --whole-archive libshar_raw.a -o combined.o \
-            -z muldefs 2>/dev/null \
-        || ld -r --whole-archive libshar_raw.a -o combined.o
-        llvm-objcopy --wildcard --keep-global-symbol='*_main' combined.o
-
-        # Package into final archive
-        ar rcs '${CURRENT_PACKAGES_DIR}/lib/libsharutils.a' combined.o
-    "
-    WORKING_DIRECTORY "${SHAR_BUILD_REL}"
-    LOGNAME "combine-${TARGET_TRIPLET}"
-)
-
-set(VCPKG_POLICY_MISMATCHED_NUMBER_OF_BINARIES enabled)
-set(VCPKG_POLICY_EMPTY_INCLUDE_FOLDER enabled)
-
-vcpkg_install_copyright(FILE_LIST "${SOURCE_PATH}/COPYING")
+busyq_finalize_port()
