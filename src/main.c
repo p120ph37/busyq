@@ -5,12 +5,21 @@
  * /proc/self/exe with argv[0] set to an applet name (e.g. curl needing
  * ssl_client), we dispatch to the applet instead of starting bash.
  *
+ * If BUSYQ_OVERLAY is enabled and a script is appended after the ELF
+ * binary (overlay data), the script is loaded and executed with all
+ * command-line arguments forwarded to it.
+ *
  * Bash's own argv[0] semantics are preserved: "sh" enters POSIX mode,
  * "bash" / "busyq" / anything unrecognised falls through to bash.
  */
 
 #include "applet_table.h"
 #include <string.h>
+
+#ifdef BUSYQ_OVERLAY
+#include "overlay.h"
+#include <stdlib.h>
+#endif
 
 /* Declared in bash's shell.h, but we just need the prototype */
 extern int bash_main(int argc, char **argv);
@@ -38,6 +47,53 @@ int main(int argc, char **argv)
         if (applet)
             return applet->main_func(argc, argv);
     }
+
+#ifdef BUSYQ_OVERLAY
+    /*
+     * Check for an embedded script overlay.  If present, run it via
+     * bash -c with the original argv[0] as $0 and remaining args as
+     * positional parameters.
+     *
+     * This runs after applet dispatch so that internal re-exec (e.g.
+     * ssl_client) still works even when an overlay is attached.
+     */
+    {
+        size_t script_len;
+        char *script = busyq_load_overlay(&script_len);
+
+        if (script) {
+            /*
+             * Build: bash -c <script> <argv[0]> <argv[1]> ...
+             *
+             * In bash -c mode:
+             *   argv[0] of bash_main is ignored for $0 purposes
+             *   the -c string is the script
+             *   next arg becomes $0 in the script
+             *   remaining args become $1, $2, ...
+             */
+            int i, ret;
+            int new_argc = 3 + argc;
+            char **new_argv = calloc((size_t)new_argc + 1, sizeof(char *));
+
+            if (!new_argv) {
+                free(script);
+                return 1;
+            }
+
+            new_argv[0] = (char *)"bash";
+            new_argv[1] = (char *)"-c";
+            new_argv[2] = script;
+            for (i = 0; i < argc; i++)
+                new_argv[3 + i] = argv[i];
+            new_argv[new_argc] = NULL;
+
+            ret = bash_main(new_argc, new_argv);
+            free(new_argv);
+            free(script);
+            return ret;
+        }
+    }
+#endif
 
     return bash_main(argc, argv);
 }
