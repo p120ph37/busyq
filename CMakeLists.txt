@@ -26,6 +26,7 @@ set(CMAKE_C_STANDARD 11)
 
 # Options
 option(BUSYQ_SSL "Build with mbedTLS SSL support and embedded certificates" OFF)
+option(BUSYQ_OVERLAY "Enable detection of bash scripts appended as ELF overlay data" ON)
 set(BUSYQ_APPLETS "" CACHE STRING
     "Semicolon-separated applet names to include (empty string = all)")
 
@@ -151,6 +152,12 @@ if(BUSYQ_SSL)
     if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/src/embedded_certs.h")
         target_compile_definitions(busyq_main PRIVATE BUSYQ_EMBEDDED_CERTS)
     endif()
+endif()
+
+# Overlay: embedded script detection (uses zlib already linked via component libs)
+if(BUSYQ_OVERLAY)
+    target_sources(busyq_main PRIVATE src/overlay.c)
+    target_compile_definitions(busyq_main PRIVATE BUSYQ_OVERLAY)
 endif()
 
 # =====================================================================
