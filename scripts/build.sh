@@ -214,7 +214,7 @@ echo "[7/7] Final link..."
 clang $LTO_CFLAGS -I"$PROJECT_DIR/src" \
     -c "$PROJECT_DIR/src/main.c" -o "$BUILD_DIR/main.o"
 clang $LTO_CFLAGS -I"$PROJECT_DIR/src" \
-    -c "$PROJECT_DIR/src/applet_table.c" -o "$BUILD_DIR/applet_table.o"
+    -c "$PROJECT_DIR/src/applets.c" -o "$BUILD_DIR/applet_table.o"
 
 # Determine output binary name
 if [ "$SSL_MODE" = "mbedtls" ]; then

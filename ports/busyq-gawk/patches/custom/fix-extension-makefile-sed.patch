@@ -1,0 +1,28 @@
+Skip extension/Makefile sed when extensions are disabled.
+
+gawk 5.3.2 configure unconditionally iterates over extension/ in its
+post-configure optimization-flag rewrite, even with --disable-extensions.
+This fails in out-of-source builds where extension/Makefile was never
+generated.
+
+--- a/configure
++++ b/configure
+@@ -15051,13 +15051,13 @@
+ 	fi
+ 	for i in . support extension
+ 	do
+-		sed -e '/-O2/s///' -e '/^CFLAGS = /s//&${DEBUG} /' $i/Makefile > foo
+-		mv foo $i/Makefile
++		test -f $i/Makefile || continue
++		sed -e '/-O2/s///' -e '/^CFLAGS = /s//&${DEBUG} /' $i/Makefile > foo && mv foo $i/Makefile
+ 	done
+ elif test "$GCC" = yes
+ then
+ 	for i in . support extension
+ 	do
+-		sed -e '/-O2/s//-O3/g'  $i/Makefile > foo
+-		mv foo $i/Makefile
++		test -f $i/Makefile || continue
++		sed -e '/-O2/s//-O3/g'  $i/Makefile > foo && mv foo $i/Makefile
+ 	done
+ fi

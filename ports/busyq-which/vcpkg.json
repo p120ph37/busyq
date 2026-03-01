@@ -1,0 +1,17 @@
+{
+  "name": "busyq-which",
+  "version-string": "2.23",
+  "description": "GNU which built as a static library for busyq",
+  "license": "GPL-3.0-or-later",
+  "dependencies": [
+    "busyq-bash",
+    {
+      "name": "vcpkg-cmake-get-vars",
+      "host": true
+    },
+    {
+      "name": "vcpkg-make",
+      "host": true
+    }
+  ]
+}
