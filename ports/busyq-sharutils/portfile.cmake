@@ -1,0 +1,81 @@
+# busyq-sharutils portfile - uses Alpine-synced source and patches
+#
+# Alpine patches applied:
+#   format-security.patch                           - Format string security fixes
+#   gcc-10.patch                                    - extern on program_name (was inline fix)
+#   Backport-stdbool.m4-from-gnulib-devel-0-52.2.patch - gnulib m4 update
+#   Port-getcwd.m4-to-ISO-C23.patch                 - getcwd detection for C23
+#   Port-the-code-to-ISO-C23.patch                  - Function declarations for C23
+#
+# These patches touch .m4 files, so autoreconf is required after patching.
+
+include("${CMAKE_CURRENT_LIST_DIR}/../../scripts/cmake/busyq_alpine_helpers.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/../../scripts/cmake/busyq_symbol_helpers.cmake")
+
+busyq_alpine_source(
+    PORT_DIR "${CMAKE_CURRENT_LIST_DIR}"
+    OUT_SOURCE_PATH SOURCE_PATH
+)
+
+# busyq-specific fix: with --disable-nls, bindtextdomain/textdomain are
+# only defined as macros in gnulib's gettext.h. The source files call them
+# without including that header. Add the include after Alpine patches.
+foreach(_src shar.c unshar.c uuencode.c uudecode.c)
+    set(_file "${SOURCE_PATH}/src/${_src}")
+    if(EXISTS "${_file}")
+        file(READ "${_file}" _content)
+        if(NOT _content MATCHES "#include \"gettext\\.h\"")
+            string(REGEX REPLACE "(#include \"[a-z]+-opts\\.h\")" "\\1\n#include \"gettext.h\"" _content "${_content}")
+            file(WRITE "${_file}" "${_content}")
+        endif()
+    endif()
+endforeach()
+
+# Detect toolchain flags
+vcpkg_cmake_get_vars(cmake_vars_file)
+include("${cmake_vars_file}")
+
+# Only build release (debug artifacts are unused)
+set(VCPKG_BUILD_TYPE release)
+
+# --- Generate compile-time symbol prefix header (LTO-safe) ---
+set(_prefix_h "${SOURCE_PATH}/shar_prefix.h")
+busyq_gen_prefix_header(shar "${_prefix_h}")
+
+set(ENV{FORCE_UNSAFE_CONFIGURE} "1")
+
+# Alpine patches touch .m4 files; regenerate configure
+vcpkg_execute_required_process(
+    COMMAND autoreconf -vif
+    WORKING_DIRECTORY "${SOURCE_PATH}"
+    LOGNAME "autoreconf-${TARGET_TRIPLET}"
+)
+
+vcpkg_configure_make(
+    SOURCE_PATH "${SOURCE_PATH}"
+    OPTIONS
+        --disable-nls
+        --disable-dependency-tracking
+)
+
+vcpkg_build_make(OPTIONS "CPPFLAGS=-include ${_prefix_h}")
+
+# Rename main() after the build — doing it before would break the link step
+foreach(_tool shar unshar uuencode uudecode)
+    busyq_post_build_rename_main(${_tool} "${_prefix_h}" "${SOURCE_PATH}/src/${_tool}.c")
+endforeach()
+
+set(SHAR_BUILD_REL "${CURRENT_BUILDTREES_DIR}/${TARGET_TRIPLET}-rel")
+
+file(GLOB SHAR_SRC_OBJS "${SHAR_BUILD_REL}/src/*.o")
+file(GLOB SHAR_LIB_OBJS "${SHAR_BUILD_REL}/lib/*.o")
+file(GLOB SHAR_LIBOPTS_OBJS "${SHAR_BUILD_REL}/libopts/*.o")
+set(SHAR_ALL_OBJS ${SHAR_SRC_OBJS} ${SHAR_LIB_OBJS} ${SHAR_LIBOPTS_OBJS})
+
+if(NOT SHAR_ALL_OBJS)
+    message(FATAL_ERROR "No sharutils object files found in ${SHAR_BUILD_REL}")
+endif()
+
+busyq_package_objects(libsharutils.a "${SHAR_BUILD_REL}" OBJECTS ${SHAR_ALL_OBJS})
+
+busyq_finalize_port()

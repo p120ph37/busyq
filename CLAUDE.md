@@ -6,10 +6,16 @@ upstream GNU tools. Intended for distroless containers and script shebangs.
 Always launches as bash, with all bundled tools available as pseudo-builtins.
 
 ## Project layout
-- `src/` - C source for entry point and applet table
+- `src/` - C source for entry point, applet table, and scanner
+- `src/applets.h` - X-macro applet registry (single source of truth)
+- `src/applets.c` - Applet dispatch table (consumes applets.h, handles filtering)
+- `src/applet_table.h` - Shared struct/API for applet lookup
+- `src/busyq_scan_main.c` - Scanner binary entry point + classifier
+- `src/busyq_scan_walk.c` - AST walker (compiled within bash port)
+- `src/busyq_scan.h` - Shared types for scanner components
 - `ports/` - vcpkg overlay ports (bash, curl, jq, coreutils, future tools)
 - `scripts/` - Helper scripts (cert generation, dev container)
-- `CMakeLists.txt` - Final link step
+- `CMakeLists.txt` - Builds libbusyq.a (library) + busyq + busyq-scan
 - `CMakePresets.json` - Build presets (vcpkg toolchain, no-ssl/ssl variants)
 - `Dockerfile` - Multi-stage build (uses p120ph37/alpine-clang-vcpkg)
 - `PLAN.md` - Roadmap for adding upstream GNU tool replacements
@@ -18,7 +24,29 @@ Always launches as bash, with all bundled tools available as pseudo-builtins.
 ```sh
 docker buildx build --output=out .
 ```
-Produces `out/busyq` (no SSL) and `out/busyq-ssl` (with mbedtls).
+Produces:
+- `out/busyq` and `out/busyq-ssl` — full binaries
+- `out/libbusyq.a` and `out/libbusyq-ssl.a` — LTO library artifacts
+- `out/busyq-dev/` — headers and scripts for custom builds
+
+### Custom builds (minimal binary for a specific script)
+```sh
+# 1. Scan a bash script to find what commands it uses
+busyq-scan myscript.sh
+
+# 2. Get the applet list in cmake format
+busyq-scan --cmake myscript.sh
+#  → -DBUSYQ_APPLETS=cat;curl;jq;ls;mkdir;sort
+
+# 3a. Build with cmake (if in the build environment)
+cmake --preset no-ssl -DBUSYQ_APPLETS="cat;curl;jq;ls;mkdir;sort"
+cmake --build --preset no-ssl
+
+# 3b. Or link against the pre-built library (fast, no vcpkg needed)
+cc -DBUSYQ_CUSTOM_APPLETS -DAPPLET_cat=1 -DAPPLET_curl=1 -DAPPLET_jq=1 \
+   -DAPPLET_ls=1 -DAPPLET_mkdir=1 -DAPPLET_sort=1 \
+   -flto -static -Os src/applets.c -Isrc/ libbusyq.a -lm -ldl -lpthread -o busyq
+```
 
 ### Build architecture (vcpkg overlay ports)
 Each component is a vcpkg overlay port in `ports/`:
@@ -36,8 +64,11 @@ and build orchestration. The top-level CMakeLists.txt links everything together.
 - Bash command lookup patched in findcmd.c to check applet table before PATH
 - Entry point always calls bash_main(); bash's own sh/POSIX-mode logic preserved
 - Tool main() functions renamed via -Dmain=toolname_main at compile time
-- All tools registered in src/applet_table.c as {name, main_func} entries
-- Multi-call packages (coreutils) use one dispatch entry point that routes on argv[0]
+- All tools registered in src/applets.h (X-macro) and dispatched via src/applets.c
+- Applet filtering at compile time: -DBUSYQ_CUSTOM_APPLETS + -DAPPLET_<name>=1
+  allows LTO to strip unreferenced entry functions (no code generation needed)
+- Coreutils uses per-command entry points (single_binary_main_*) instead of a
+  shared dispatcher, enabling LTO to prune unused commands in custom builds
 
 ### All libraries via vcpkg (no system libraries except musl)
 Every library dependency must be built via vcpkg — never use system-installed
@@ -58,20 +89,36 @@ linux-headers for kernel API definitions.
 
 ### Symbol isolation (critical for multi-package linking)
 Multiple GNU packages embed gnulib, causing symbol collisions (xmalloc,
-hash_insert, yyparse, etc.) when statically linked into one binary. Each
-package's portfile resolves this:
+hash_insert, quotearg, etc.) when statically linked into one binary.
 
-1. `ld -r --whole-archive libfoo_raw.a -o foo_combined.o` — combine all
-   objects into one relocatable file (resolves internal dupes)
-2. `nm -u foo_combined.o` — record undefined symbols (libc, pthreads, etc.)
-3. `objcopy --prefix-symbols=foo_` — namespace all symbols
-4. `objcopy --redefine-syms=unprefix.map` — unprefix the external deps
-   (so libc calls work) and rename `foo_main` → `toolname_main`
-5. Package into `libfoo.a`
+**Compile-time prefixing** (preferred — preserves LLVM bitcode for LTO):
+1. Extract defined symbols from already-installed libraries (e.g. bash)
+2. Subtract libc/system symbols (must not be renamed)
+3. Generate `cu_prefix.h` with `#define sym cu_sym` for each collision
+4. Build with `-include cu_prefix.h` (via CPPFLAGS) — renames at CPP level
+5. `ld -r --whole-archive -z muldefs` to combine objects (lld preserves bitcode)
+6. Package into `libfoo.a` — no objcopy, full bitcode preserved
 
-This pattern is implemented in `ports/busyq-coreutils/portfile.cmake` and
-should be reused for all future packages that embed gnulib (gawk, sed, grep,
+This is implemented in `ports/busyq-coreutils/portfile.cmake` and should
+be reused for all future packages that embed gnulib (gawk, sed, grep,
 findutils, diffutils, etc.).
+
+**Why not objcopy?** The old approach (`objcopy --prefix-symbols=cu_`)
+renames ELF symbols but not LLVM IR references, destroying bitcode and
+preventing cross-project LTO optimization. Compile-time prefixing operates
+at the source level, so LLVM bitcode is preserved end-to-end.
+
+### Per-command coreutils entry points (LTO pruning)
+Coreutils is built with `--enable-single-binary=symlinks`, which renames
+each tool's `main()` to `single_binary_main_TOOLNAME()`. The applet table
+in `src/applets.h` references these individual entry points directly,
+bypassing the coreutils argv[0]-based dispatcher. This gives LTO a static
+call graph: only commands present in the applet table are reachable, and
+unused commands are pruned during link-time optimization.
+
+Special entry point names (from coreutils' `gen-single-binary.sh`):
+- `[` → `single_binary_main__` (bracket sanitized to underscore)
+- `install` → `single_binary_main_ginstall` (avoids make target conflict)
 
 ## Iterative development with Docker
 

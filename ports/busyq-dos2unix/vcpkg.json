@@ -1,0 +1,13 @@
+{
+  "name": "busyq-dos2unix",
+  "version-string": "7.5.3",
+  "description": "dos2unix built as a static library for busyq",
+  "license": "BSD-2-Clause",
+  "dependencies": [
+    "busyq-bash",
+    {
+      "name": "vcpkg-cmake-get-vars",
+      "host": true
+    }
+  ]
+}

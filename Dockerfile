@@ -1,13 +1,18 @@
 # Dockerfile - Multi-stage build for busyq
 #
-# Builds two variants of the busyq binary (bash+curl+jq+coreutils):
+# Builds two variants of the busyq binary (bash+curl+jq+coreutils+tools):
 #   1. busyq      - No SSL (smaller)
 #   2. busyq-ssl  - With mbedtls + embedded Mozilla CA bundle
+#
+# Also produces LTO library artifacts for custom builds:
+#   3. libbusyq.a     - No-SSL merged library (LTO bitcode)
+#   4. libbusyq-ssl.a - SSL merged library (LTO bitcode)
+#   5. busyq-dev/     - Headers + scripts for custom builds
 #
 # Usage:
 #   docker buildx build --output=out .
 #
-# The output directory will contain both binaries.
+# The output directory will contain binaries, libraries, and dev files.
 
 # ============================================================
 # Stage 1: Build environment
@@ -33,22 +38,37 @@ RUN apk add --no-cache \
     texinfo \
     perl \
     linux-headers \
-    xz
+    xz \
+    ed \
+    patch \
+    gettext-dev
 
 # Copy project files
 COPY . /src
 WORKDIR /src
+
+# Validate applets.h sort order (binary search requires lexicographic order)
+RUN grep '_BQ_IF(APPLET_' src/applets.h | grep 'APPLET(' | \
+    sed 's/.*APPLET([^,]*, //;s/,.*//' > /tmp/applet_cmds.txt \
+    && sort -c /tmp/applet_cmds.txt \
+    || (echo "ERROR: src/applets.h entries are not sorted by command name" && exit 1)
 
 # ---- Build variant 1: no SSL ----
 # CMakePresets.json configures the vcpkg toolchain file, which handles
 # package installation (via vcpkg.json manifest) during cmake configure.
 RUN cmake --preset no-ssl && cmake --build --preset no-ssl
 
-# Strip and compress
+# Strip and compress binaries; also copy library artifact
 RUN strip --strip-all build/no-ssl/busyq \
-    && mkdir -p out \
+    && mkdir -p out/busyq-dev \
     && cp build/no-ssl/busyq out/busyq \
-    && upx --best --lzma out/busyq || true
+    && cp build/no-ssl/libbusyq.a out/libbusyq.a \
+    && (upx --best --lzma out/busyq || true) \
+    && if [ -f build/no-ssl/busyq-scan ]; then \
+        strip --strip-all build/no-ssl/busyq-scan \
+        && cp build/no-ssl/busyq-scan out/busyq-scan \
+        && (upx --best --lzma out/busyq-scan || true); \
+    fi
 
 # ---- Build variant 2: with SSL ----
 # Generate embedded CA certificates (needed before vcpkg builds curl[ssl])
@@ -58,10 +78,19 @@ RUN scripts/generate-certs.sh src
 # to install the ssl feature dependencies (mbedtls, curl[ssl]).
 RUN cmake --preset ssl && cmake --build --preset ssl
 
-# Strip and compress
+# Strip and compress binary; also copy library artifact
 RUN strip --strip-all build/ssl/busyq \
     && cp build/ssl/busyq out/busyq-ssl \
-    && upx --best --lzma out/busyq-ssl || true
+    && cp build/ssl/libbusyq.a out/libbusyq-ssl.a \
+    && (upx --best --lzma out/busyq-ssl || true)
+
+# ---- Copy dev files for custom builds ----
+RUN cp src/applet_table.h out/busyq-dev/ \
+    && cp src/applets.h out/busyq-dev/ \
+    && cp src/applets.c out/busyq-dev/ \
+    && if [ -f out/busyq-scan ]; then \
+        cp out/busyq-scan out/busyq-dev/; \
+    fi
 
 # ============================================================
 # Stage 2: Smoke tests
@@ -69,6 +98,7 @@ RUN strip --strip-all build/ssl/busyq \
 FROM alpine:latest AS test
 COPY --from=build /src/out/busyq /busyq
 COPY --from=build /src/out/busyq-ssl /busyq-ssl
+# Core (Phase 0-1)
 RUN /busyq -c 'echo "bash: ok"' \
     && /busyq -c 'ls /' > /dev/null \
     && /busyq -c 'cat /dev/null' \
@@ -76,11 +106,52 @@ RUN /busyq -c 'echo "bash: ok"' \
     && /busyq -c 'jq -n "{test: true}"' \
     && /busyq -c 'curl --version' > /dev/null \
     && /busyq-ssl -c 'curl --version' | grep -qi tls \
-    && echo "All smoke tests passed"
+    && echo "Core tests passed"
+# Phase 2: Text processing
+RUN /busyq -c 'echo hello | awk "{print \$1}"' \
+    && /busyq -c 'echo hello | sed s/hello/world/' \
+    && /busyq -c 'echo hello | grep hello' \
+    && /busyq -c 'echo -e "a\nb" | diff - <(echo -e "a\nc") || true' \
+    && /busyq -c 'find / -maxdepth 1 -name "busyq" -print' > /dev/null \
+    && /busyq -c 'echo test | xargs echo' \
+    && echo "Phase 2 tests passed"
+# Phase 3: Archival
+RUN /busyq -c 'echo test | gzip | gunzip' \
+    && /busyq -c 'echo test | bzip2 | bunzip2' \
+    && /busyq -c 'echo test | xz | unxz' \
+    && /busyq -c 'tar --version' > /dev/null \
+    && echo "Phase 3 tests passed"
+# Phase 4: Small standalone tools
+RUN /busyq -c 'echo "1+1" | bc' \
+    && /busyq -c 'type ls' > /dev/null \
+    && /busyq -c 'strings /busyq | head -1' > /dev/null \
+    && echo "Phase 4 tests passed"
+# Phase 5: Networking
+RUN /busyq -c 'hostname' > /dev/null \
+    && echo "Phase 5 tests passed"
+# Phase 6: Process utilities
+RUN /busyq -c 'ps aux' > /dev/null \
+    && /busyq -c 'free' > /dev/null \
+    && echo "Phase 6 tests passed"
+RUN echo "All smoke tests passed"
+
+# Smoke test the scanner if built
+COPY --from=build /src/out/busyq-scan* /tmp/
+RUN if [ -f /tmp/busyq-scan ]; then \
+        echo '#!/bin/bash' > /tmp/test.sh \
+        && echo 'ls -la /tmp' >> /tmp/test.sh \
+        && echo 'curl http://example.com | jq .' >> /tmp/test.sh \
+        && /tmp/busyq-scan --raw /tmp/test.sh | grep -q 'CMD' \
+        && echo "Scanner smoke test passed"; \
+    fi
 
 # ============================================================
-# Stage 3: Extract binaries
+# Stage 3: Extract binaries + libraries
 # ============================================================
 FROM scratch AS output
 COPY --from=build /src/out/busyq /busyq
 COPY --from=build /src/out/busyq-ssl /busyq-ssl
+COPY --from=build /src/out/busyq-scan* /
+COPY --from=build /src/out/libbusyq.a /libbusyq.a
+COPY --from=build /src/out/libbusyq-ssl.a /libbusyq-ssl.a
+COPY --from=build /src/out/busyq-dev/ /busyq-dev/

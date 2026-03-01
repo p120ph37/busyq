@@ -1,7 +1,7 @@
 {
   "name": "busyq",
-  "version-string": "0.1.0",
-  "description": "Single-binary bash+curl+jq for distroless containers",
+  "version-string": "0.2.0",
+  "description": "Single-binary bash+curl+jq+coreutils+tools for distroless containers",
   "dependencies": [
     "busyq-bash",
     "busyq-coreutils",
@@ -11,7 +11,37 @@
     {
       "name": "busyq-curl",
       "default-features": false
-    }
+    },
+    "busyq-gawk",
+    "busyq-sed",
+    "busyq-grep",
+    "busyq-diffutils",
+    "busyq-findutils",
+    "busyq-ed",
+    "busyq-patch",
+    "busyq-tar",
+    "busyq-gzip",
+    "busyq-bzip2",
+    "busyq-xz",
+    "busyq-cpio",
+    "busyq-lzop",
+    "busyq-zip",
+    "busyq-bc",
+    "busyq-less",
+    "busyq-strings",
+    "busyq-time",
+    "busyq-dos2unix",
+    "busyq-sharutils",
+    "busyq-reset",
+    "busyq-which",
+    "busyq-wget",
+    "busyq-netcat",
+    "busyq-iputils",
+    "busyq-hostname",
+    "busyq-whois",
+    "busyq-procps",
+    "busyq-psmisc",
+    "busyq-lsof"
   ],
   "features": {
     "ssl": {
