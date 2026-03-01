@@ -58,9 +58,10 @@ RUN grep '_BQ_IF(APPLET_' src/applets.h | grep 'APPLET(' | \
 # package installation (via vcpkg.json manifest) during cmake configure.
 RUN cmake --preset no-ssl && cmake --build --preset no-ssl
 
-# Strip and compress binaries; also copy library artifact
+# Strip and compress binaries; also copy library artifact (keep a pre-UPX copy for overlay tests)
 RUN strip --strip-all build/no-ssl/busyq \
     && mkdir -p out/busyq-dev \
+    && cp build/no-ssl/busyq out/busyq-nopack \
     && cp build/no-ssl/busyq out/busyq \
     && cp build/no-ssl/libbusyq.a out/libbusyq.a \
     && (upx --best --lzma out/busyq || true) \
@@ -97,6 +98,7 @@ RUN cp src/applet_table.h out/busyq-dev/ \
 # ============================================================
 FROM alpine:latest AS test
 COPY --from=build /src/out/busyq /busyq
+COPY --from=build /src/out/busyq-nopack /busyq-nopack
 COPY --from=build /src/out/busyq-ssl /busyq-ssl
 # Core (Phase 0-1)
 RUN /busyq -c 'echo "bash: ok"' \
@@ -144,6 +146,24 @@ RUN if [ -f /tmp/busyq-scan ]; then \
         && /tmp/busyq-scan --raw /tmp/test.sh | grep -q 'CMD' \
         && echo "Scanner smoke test passed"; \
     fi
+
+# Overlay tests: 2x2 matrix of binary (stripped / UPX) × script (raw / gzip)
+RUN set -e \
+    && printf 'echo "BUSYQ_OVERLAY:$0:args=$#:${1-}:${2-}"\n' > /tmp/test.sh \
+    && gzip -9c /tmp/test.sh > /tmp/test.sh.gz \
+    && cat /busyq-nopack /tmp/test.sh > /tmp/t1 && chmod +x /tmp/t1 \
+    && /tmp/t1 hello world | grep -q 'BUSYQ_OVERLAY:/tmp/t1:args=2:hello:world' \
+    && echo "overlay 1/4 passed: stripped + raw" \
+    && cat /busyq-nopack /tmp/test.sh.gz > /tmp/t2 && chmod +x /tmp/t2 \
+    && /tmp/t2 hello world | grep -q 'BUSYQ_OVERLAY:/tmp/t2:args=2:hello:world' \
+    && echo "overlay 2/4 passed: stripped + gzip" \
+    && cat /busyq /tmp/test.sh > /tmp/t3 && chmod +x /tmp/t3 \
+    && /tmp/t3 hello world | grep -q 'BUSYQ_OVERLAY:/tmp/t3:args=2:hello:world' \
+    && echo "overlay 3/4 passed: upx + raw" \
+    && cat /busyq /tmp/test.sh.gz > /tmp/t4 && chmod +x /tmp/t4 \
+    && /tmp/t4 hello world | grep -q 'BUSYQ_OVERLAY:/tmp/t4:args=2:hello:world' \
+    && echo "overlay 4/4 passed: upx + gzip" \
+    && echo "All overlay tests passed"
 
 # ============================================================
 # Stage 3: Extract binaries + libraries

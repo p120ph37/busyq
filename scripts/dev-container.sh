@@ -186,6 +186,17 @@ dev-test() {
     dev-exec './build/no-ssl/busyq -c "echo -e \"b\na\nc\" | sort | head -1 | tr a-z A-Z && echo \"coreutils: ok\""'
     dev-exec './build/no-ssl/busyq -c "jq -n \"{test: true}\" && echo \"jq: ok\""'
     dev-exec './build/no-ssl/busyq -c "curl --version > /dev/null && echo \"curl: ok\""'
+
+    echo "=== Overlay tests ==="
+    # Write test script to project dir (bind-mounted at /src in the container)
+    printf 'echo "BUSYQ_OVERLAY:$0:args=$#:${1-}:${2-}"\n' > "${PROJECT_DIR}/.overlay-test.sh"
+    dev-exec 'gzip -9c .overlay-test.sh > /tmp/overlay-test.sh.gz'
+    # Raw script overlay
+    dev-exec 'cat ./build/no-ssl/busyq .overlay-test.sh > /tmp/overlay-raw && chmod +x /tmp/overlay-raw && /tmp/overlay-raw hello world | grep -q "BUSYQ_OVERLAY:/tmp/overlay-raw:args=2:hello:world" && echo "overlay raw: ok"'
+    # Gzip script overlay
+    dev-exec 'cat ./build/no-ssl/busyq /tmp/overlay-test.sh.gz > /tmp/overlay-gz && chmod +x /tmp/overlay-gz && /tmp/overlay-gz hello world | grep -q "BUSYQ_OVERLAY:/tmp/overlay-gz:args=2:hello:world" && echo "overlay gzip: ok"'
+    rm -f "${PROJECT_DIR}/.overlay-test.sh"
+
     echo "=== All smoke tests passed ==="
 }
 
