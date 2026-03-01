@@ -117,7 +117,7 @@ RUN /busyq -c 'echo test | gzip | gunzip' \
     && echo "Phase 3 tests passed"
 # Phase 4: Small standalone tools
 RUN /busyq -c 'echo "1+1" | bc' \
-    && /busyq -c 'which ls' > /dev/null \
+    && /busyq -c 'type ls' > /dev/null \
     && /busyq -c 'strings /busyq | head -1' > /dev/null \
     && echo "Phase 4 tests passed"
 # Phase 5: Networking
