@@ -53,6 +53,7 @@ PORT_MAP[busyq-time]="community/time"
 PORT_MAP[busyq-which]="main/which"
 # Phase 5: Networking
 PORT_MAP[busyq-wget]="main/wget"
+PORT_MAP[busyq-netcat]="main/netcat-openbsd"
 PORT_MAP[busyq-lsof]="main/lsof"
 # Phase 6: Process utilities
 PORT_MAP[busyq-procps]="main/procps-ng"

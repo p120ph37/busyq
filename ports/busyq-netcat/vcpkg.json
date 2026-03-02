@@ -1,8 +1,8 @@
 {
   "name": "busyq-netcat",
-  "version-string": "1.0.0",
-  "description": "Minimal netcat (nc) implementation built as a static library for busyq",
-  "license": "MIT",
+  "version-string": "1.226.1.1",
+  "description": "OpenBSD netcat (nc) built as a static library for busyq",
+  "license": "BSD-3-Clause",
   "dependencies": [
     {
       "name": "vcpkg-cmake-get-vars",

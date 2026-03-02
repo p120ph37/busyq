@@ -191,10 +191,13 @@ All GPL-3.0+.
 - [ ] Commands: wget
 - [ ] Note: busyq already bundles curl; wget adds familiar scripting interface
 
-**nmap ncat** or **OpenBSD netcat** (various licenses)
-- [ ] Create `ports/busyq-netcat/portfile.cmake`
-- [ ] Commands: nc, ncat
-- [ ] Evaluate: ncat (from nmap, Nmap Public Source License) vs openbsd-netcat (BSD)
+**OpenBSD netcat** (BSD-3-Clause) — via Debian source package
+- [x] Create `ports/busyq-netcat/portfile.cmake`
+- [x] Commands: nc
+- [x] Decision: OpenBSD netcat (BSD license, from Debian's netcat-openbsd 1.226-1.1).
+      Tracks Alpine `main/netcat-openbsd` APK. musl compat patch removes libbsd
+      dependency (musl provides strtonum/strlcpy natively; readpassphrase shipped
+      as standalone compat file).
 
 **tftp-hpa 5.2+** (BSD-3-Clause)
 - [ ] Create `ports/busyq-tftp/portfile.cmake`
