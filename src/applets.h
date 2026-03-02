@@ -242,8 +242,6 @@
 #ifndef APPLET_fadvise
 #define APPLET_fadvise _BQ_DEFAULT
 #endif
-#define APPLET_factor _BQ_DEFAULT
-#endif
 #ifndef APPLET_fallocate
 #define APPLET_fallocate _BQ_DEFAULT
 #endif

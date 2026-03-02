@@ -1,5 +1,5 @@
 /*
- * applet_table.h - Applet dispatch interface for busyq
+ * features.h - Applet dispatch interface for busyq
  *
  * Provides lookup for all embedded applets (curl, jq, and any future
  * upstream tools added as vcpkg overlay ports).  Each applet registers
@@ -7,8 +7,8 @@
  * via the applet-execute patch.
  */
 
-#ifndef BUSYQ_APPLET_TABLE_H
-#define BUSYQ_APPLET_TABLE_H
+#ifndef BUSYQ_FEATURES_H
+#define BUSYQ_FEATURES_H
 
 #include <stddef.h>
 
@@ -44,4 +44,4 @@ const struct busyq_applet *busyq_find_applet(const char *name);
  */
 char *busyq_check_overlay(size_t *out_len);
 
-#endif /* BUSYQ_APPLET_TABLE_H */
+#endif /* BUSYQ_FEATURES_H */

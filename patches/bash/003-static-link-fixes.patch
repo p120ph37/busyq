@@ -27,15 +27,15 @@
 +extern int bash_main(int argc, char **argv);
 +#endif
 --- /dev/null
-+++ bash-5.3/busyq_applet_table.h
++++ bash-5.3/busyq_features.h
 @@ -0,0 +1,10 @@
 +/*
-+ * busyq_applet_table.h - Shim header for bash source tree
++ * busyq_features.h - Shim header for bash source tree
 + *
-+ * This is a copy/symlink of src/applet_table.h, placed in the bash
++ * This is a copy/symlink of src/features.h, placed in the bash
 + * source tree so that the patched findcmd.c and execute_cmd.c can
 + * #include it without modifying bash's include paths extensively.
 + */
 +
-+#include "applet_table.h"
-+/* applet_table.h is added to bash's include path via -I flag in build.sh */
++#include "features.h"
++/* features.h is added to bash's include path via -I flag in build.sh */

@@ -11,7 +11,7 @@
  * forwarded to it.
  */
 
-#include "applet_table.h"
+#include "features.h"
 #include <stdlib.h>
 #include <string.h>
 

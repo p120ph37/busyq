@@ -7,7 +7,7 @@ index 070f511..a1b3c4e 100644
  #include "hashcmd.h"
 
 +/* busyq: applet table for embedded command dispatch */
-+#include "busyq_applet_table.h"
++#include "busyq_features.h"
 +
  #if defined (COND_COMMAND)
  #  include "test.h"

@@ -4,7 +4,7 @@
  #include "execute_cmd.h"
  #include "findcmd.h"
 
-+#include "busyq_applet_table.h"
++#include "busyq_features.h"
 +#include <sys/wait.h>
 +
 +extern const char * const BUSYQ_APPLET_MARKER;

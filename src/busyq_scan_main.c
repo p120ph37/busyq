@@ -17,7 +17,7 @@
 #include <unistd.h>
 #include <sys/wait.h>
 
-#include "applet_table.h"
+#include "features.h"
 #include "busyq_scan.h"
 
 /* Declared in bash's shell.h (compiled without NO_MAIN_ENV_ARG) */

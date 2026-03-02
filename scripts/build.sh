@@ -155,7 +155,7 @@ if [ ! -f "$BASH_BUILD/libbash.a" ] && [ ! -f "$BASH_BUILD/bash" ]; then
     cd "$BASH_BUILD"
 
     # Copy applet headers into bash source for the patches to find
-    cp "$PROJECT_DIR/src/applet_table.h" "$BASH_SRC/busyq_applet_table.h"
+    cp "$PROJECT_DIR/src/features.h" "$BASH_SRC/busyq_features.h"
 
     "$BASH_SRC/configure" \
         CC=clang \
@@ -214,7 +214,7 @@ echo "[7/7] Final link..."
 clang $LTO_CFLAGS -I"$PROJECT_DIR/src" \
     -c "$PROJECT_DIR/src/main.c" -o "$BUILD_DIR/main.o"
 clang $LTO_CFLAGS -I"$PROJECT_DIR/src" \
-    -c "$PROJECT_DIR/src/features.c" -o "$BUILD_DIR/applet_table.o"
+    -c "$PROJECT_DIR/src/features.c" -o "$BUILD_DIR/features.o"
 
 # Determine output binary name
 if [ "$SSL_MODE" = "mbedtls" ]; then
@@ -225,7 +225,7 @@ fi
 
 # Link everything together
 LINK_LIBS=""
-LINK_LIBS="$LINK_LIBS $BUILD_DIR/main.o $BUILD_DIR/applet_table.o"
+LINK_LIBS="$LINK_LIBS $BUILD_DIR/main.o $BUILD_DIR/features.o"
 
 # Bash libraries
 LINK_LIBS="$LINK_LIBS -L$BASH_BUILD -L$BASH_BUILD/builtins -L$BASH_BUILD/lib/readline -L$BASH_BUILD/lib/glob -L$BASH_BUILD/lib/tilde -L$BASH_BUILD/lib/sh"

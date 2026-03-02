@@ -28,19 +28,19 @@ foreach(_patch_num 001 002 003)
     )
 endforeach()
 
-# Copy applet table header into bash source tree so compilation can find it
+# Copy features header into bash source tree so compilation can find it
 file(COPY
-    "${CURRENT_PORT_DIR}/../../src/applet_table.h"
+    "${CURRENT_PORT_DIR}/../../src/features.h"
     DESTINATION "${SOURCE_PATH}"
     FILE_PERMISSIONS OWNER_READ OWNER_WRITE
 )
-file(RENAME "${SOURCE_PATH}/applet_table.h" "${SOURCE_PATH}/busyq_applet_table.h")
+file(RENAME "${SOURCE_PATH}/features.h" "${SOURCE_PATH}/busyq_features.h")
 
 # Provide stubs for busyq_find_applet and busyq_check_overlay so bash
 # can link during its build.  The real implementations come from
 # features.c at final link time.
 file(WRITE "${SOURCE_PATH}/busyq_stub.c" [=[
-#include "busyq_applet_table.h"
+#include "busyq_features.h"
 const struct busyq_applet *busyq_find_applet(const char *name) { (void)name; return 0; }
 char *busyq_check_overlay(size_t *out_len) { (void)out_len; return 0; }
 ]=])
@@ -153,7 +153,7 @@ endif()
 # Install key headers
 file(INSTALL
     "${SOURCE_PATH}/shell.h"
-    "${SOURCE_PATH}/busyq_applet_table.h"
+    "${SOURCE_PATH}/busyq_features.h"
     DESTINATION "${CURRENT_PACKAGES_DIR}/include/bash"
 )
 
