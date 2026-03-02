@@ -148,6 +148,7 @@ RUN if [ -f /tmp/busyq-scan ]; then \
     fi
 
 # Overlay tests: 2x2 matrix of binary (stripped / UPX) × script (raw / gzip)
+# UPX metadata after ELF segments is auto-detected and skipped.
 RUN set -e \
     && printf 'echo "BUSYQ_OVERLAY:$0:args=$#:${1-}:${2-}"\n' > /tmp/test.sh \
     && gzip -9c /tmp/test.sh > /tmp/test.sh.gz \
