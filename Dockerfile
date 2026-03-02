@@ -65,11 +65,9 @@ RUN strip --strip-all build/no-ssl/busyq \
     && cp build/no-ssl/busyq out/busyq-nossl \
     && cp build/no-ssl/libbusyq.a out/libbusyq-nossl.a \
     && (upx --best --lzma out/busyq-nossl || true) \
-    && if [ -f build/no-ssl/busyq-scan ]; then \
-        strip --strip-all build/no-ssl/busyq-scan \
-        && cp build/no-ssl/busyq-scan out/busyq-scan \
-        && (upx --best --lzma out/busyq-scan || true); \
-    fi
+    && strip --strip-all build/no-ssl/busyq-scan \
+    && cp build/no-ssl/busyq-scan out/busyq-scan \
+    && (upx --best --lzma out/busyq-scan || true)
 
 # ---- Build variant 2: with SSL ----
 # Generate embedded CA certificates (needed before vcpkg builds curl[ssl])
@@ -89,9 +87,8 @@ RUN strip --strip-all build/ssl/busyq \
 RUN cp src/features.h out/busyq-dev/ \
     && cp src/applets.h out/busyq-dev/ \
     && cp src/features.c out/busyq-dev/ \
-    && if [ -f out/busyq-scan ]; then \
-        cp out/busyq-scan out/busyq-dev/; \
-    fi
+    && cp src/overlay.h out/busyq-dev/ \
+    && cp out/busyq-scan out/busyq-dev/
 
 # ============================================================
 # Stage 2: Smoke tests
@@ -137,15 +134,13 @@ RUN /busyq -c 'ps aux' > /dev/null \
     && echo "Phase 6 tests passed"
 RUN echo "All smoke tests passed"
 
-# Smoke test the scanner if built
-COPY --from=build /src/out/busyq-scan* /tmp/
-RUN if [ -f /tmp/busyq-scan ]; then \
-        echo '#!/bin/bash' > /tmp/test.sh \
-        && echo 'ls -la /tmp' >> /tmp/test.sh \
-        && echo 'curl http://example.com | jq .' >> /tmp/test.sh \
-        && /tmp/busyq-scan --raw /tmp/test.sh | grep -q 'CMD' \
-        && echo "Scanner smoke test passed"; \
-    fi
+# Smoke test the scanner
+COPY --from=build /src/out/busyq-scan /tmp/busyq-scan
+RUN echo '#!/bin/bash' > /tmp/test.sh \
+    && echo 'ls -la /tmp' >> /tmp/test.sh \
+    && echo 'curl http://example.com | jq .' >> /tmp/test.sh \
+    && /tmp/busyq-scan --raw /tmp/test.sh | grep -q 'CMD' \
+    && echo "Scanner smoke test passed"
 
 # Overlay tests: 2x2 matrix of binary (stripped / UPX) × script (raw / gzip)
 # UPX metadata after ELF segments is auto-detected and skipped.
@@ -167,12 +162,45 @@ RUN set -e \
     && echo "All overlay tests passed"
 
 # ============================================================
-# Stage 3: Extract binaries + libraries
+# Stage 3: Publishable images
+# ============================================================
+
+# ---- busyq:latest (SSL variant, from scratch) ----
+FROM scratch AS latest
+COPY --from=build /src/out/busyq /busyq
+RUN ["/busyq", "-c", "mkdir -p /bin && ln -sf /busyq /bin/busyq"]
+
+# ---- busyq:nossl (no-SSL variant, from scratch) ----
+FROM scratch AS nossl
+COPY --from=build /src/out/busyq-nossl /busyq
+RUN ["/busyq", "-c", "mkdir -p /bin && ln -sf /busyq /bin/busyq"]
+
+# ---- busyq:custom (Alpine-based build environment) ----
+FROM alpine:3.23 AS custom
+RUN apk add --no-cache clang lld musl-dev upx gzip
+COPY --from=build /src/out/libbusyq.a /opt/busyq/libbusyq.a
+COPY --from=build /src/out/libbusyq-nossl.a /opt/busyq/libbusyq-nossl.a
+COPY --from=build /src/out/busyq-dev/ /opt/busyq/
+COPY scripts/custom-build.sh /usr/local/bin/custom-build
+ENTRYPOINT ["custom-build"]
+
+# ---- Custom build smoke test ----
+FROM custom AS custom-test
+RUN printf '#!/bin/bash\nls /tmp\necho hello | cat\ndate +%%s\n' > /tmp/test.sh \
+    && custom-build --applets ls,cat,date --no-script --raw > /tmp/test-binary \
+    && chmod +x /tmp/test-binary \
+    && /tmp/test-binary -c 'echo "custom build: ok"' \
+    && /tmp/test-binary -c 'ls /' > /dev/null \
+    && /tmp/test-binary -c 'date +%s' > /dev/null \
+    && echo "Custom build smoke test passed"
+
+# ============================================================
+# Stage 4: Extract binaries + libraries (local builds)
 # ============================================================
 FROM scratch AS output
 COPY --from=build /src/out/busyq /busyq
 COPY --from=build /src/out/busyq-nossl /busyq-nossl
-COPY --from=build /src/out/busyq-scan* /
+COPY --from=build /src/out/busyq-scan /busyq-scan
 COPY --from=build /src/out/libbusyq.a /libbusyq.a
 COPY --from=build /src/out/libbusyq-nossl.a /libbusyq-nossl.a
 COPY --from=build /src/out/busyq-dev/ /busyq-dev/

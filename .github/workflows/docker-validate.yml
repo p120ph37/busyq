@@ -42,10 +42,38 @@ jobs:
           cache-from: type=gha,scope=build-${{ env.PLATFORM_PAIR }}
           cache-to: type=gha,scope=build-${{ env.PLATFORM_PAIR }},mode=max
 
-      - name: Build final image (no push)
+      - name: Run custom build smoke test
         uses: docker/build-push-action@v6
         with:
           context: .
+          target: custom-test
+          platforms: ${{ matrix.platform }}
+          push: false
+          cache-from: type=gha,scope=build-${{ env.PLATFORM_PAIR }}
+
+      - name: Build latest image (no push)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: latest
+          platforms: ${{ matrix.platform }}
+          push: false
+          cache-from: type=gha,scope=build-${{ env.PLATFORM_PAIR }}
+
+      - name: Build nossl image (no push)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: nossl
+          platforms: ${{ matrix.platform }}
+          push: false
+          cache-from: type=gha,scope=build-${{ env.PLATFORM_PAIR }}
+
+      - name: Build custom image (no push)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: custom
           platforms: ${{ matrix.platform }}
           push: false
           cache-from: type=gha,scope=build-${{ env.PLATFORM_PAIR }}

@@ -1,0 +1,9 @@
+out/
+build/
+sources/
+vcpkg_installed/
+.git/
+.github/
+.claude/
+.vscode/
+*.md

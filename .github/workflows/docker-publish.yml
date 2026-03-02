@@ -2,16 +2,12 @@ name: Docker
 
 on:
   push:
-    branches: [main]
     tags: ['v*']
-
-    paths-ignore:
-      - '**/*.md'
   # Allow manual trigger
   workflow_dispatch:
 
 env:
-  DOCKERHUB_REPO: ${{ vars.DOCKERHUB_USERNAME }}/busyq
+  DOCKERHUB_REPO: p120ph37/busyq
 
 jobs:
   build:
@@ -47,12 +43,6 @@ jobs:
           username: ${{ vars.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Extract metadata (labels)
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.DOCKERHUB_REPO }}
-
       - name: Run smoke tests
         uses: docker/build-push-action@v6
         with:
@@ -63,28 +53,112 @@ jobs:
           cache-from: type=gha,scope=build-${{ env.PLATFORM_PAIR }}
           cache-to: type=gha,scope=build-${{ env.PLATFORM_PAIR }},mode=max
 
-      - name: Build and push by digest
-        id: build
+      - name: Run custom build smoke test
         uses: docker/build-push-action@v6
         with:
           context: .
+          target: custom-test
           platforms: ${{ matrix.platform }}
-          labels: ${{ steps.meta.outputs.labels }}
+          push: false
+          cache-from: type=gha,scope=build-${{ env.PLATFORM_PAIR }}
+
+      # ---- Build and push: latest (SSL) ----
+      - name: Extract metadata (latest)
+        id: meta-latest
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.DOCKERHUB_REPO }}
+          # Only tag as "latest" on semver tag push
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}.{{patch}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=latest
+
+      - name: Build latest by digest
+        id: build-latest
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: latest
+          platforms: ${{ matrix.platform }}
+          labels: ${{ steps.meta-latest.outputs.labels }}
           tags: ${{ env.DOCKERHUB_REPO }}
           outputs: type=image,push-by-digest=true,name-canonical=true,push=true
           cache-from: type=gha,scope=build-${{ env.PLATFORM_PAIR }}
 
-      - name: Export digest
+      - name: Export digest (latest)
         run: |
-          mkdir -p ${{ runner.temp }}/digests
-          digest="${{ steps.build.outputs.digest }}"
-          touch "${{ runner.temp }}/digests/${digest#sha256:}"
+          mkdir -p ${{ runner.temp }}/digests/latest
+          digest="${{ steps.build-latest.outputs.digest }}"
+          touch "${{ runner.temp }}/digests/latest/${digest#sha256:}"
 
-      - name: Upload digest
+      # ---- Build and push: nossl ----
+      - name: Extract metadata (nossl)
+        id: meta-nossl
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.DOCKERHUB_REPO }}
+          tags: |
+            type=semver,pattern={{version}},suffix=-nossl
+            type=semver,pattern={{major}}.{{minor}}.{{patch}},suffix=-nossl
+            type=semver,pattern={{major}}.{{minor}},suffix=-nossl
+            type=raw,value=nossl
+
+      - name: Build nossl by digest
+        id: build-nossl
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: nossl
+          platforms: ${{ matrix.platform }}
+          labels: ${{ steps.meta-nossl.outputs.labels }}
+          tags: ${{ env.DOCKERHUB_REPO }}
+          outputs: type=image,push-by-digest=true,name-canonical=true,push=true
+          cache-from: type=gha,scope=build-${{ env.PLATFORM_PAIR }}
+
+      - name: Export digest (nossl)
+        run: |
+          mkdir -p ${{ runner.temp }}/digests/nossl
+          digest="${{ steps.build-nossl.outputs.digest }}"
+          touch "${{ runner.temp }}/digests/nossl/${digest#sha256:}"
+
+      # ---- Build and push: custom ----
+      - name: Extract metadata (custom)
+        id: meta-custom
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.DOCKERHUB_REPO }}
+          tags: |
+            type=semver,pattern={{version}},suffix=-custom
+            type=semver,pattern={{major}}.{{minor}}.{{patch}},suffix=-custom
+            type=semver,pattern={{major}}.{{minor}},suffix=-custom
+            type=raw,value=custom
+
+      - name: Build custom by digest
+        id: build-custom
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: custom
+          platforms: ${{ matrix.platform }}
+          labels: ${{ steps.meta-custom.outputs.labels }}
+          tags: ${{ env.DOCKERHUB_REPO }}
+          outputs: type=image,push-by-digest=true,name-canonical=true,push=true
+          cache-from: type=gha,scope=build-${{ env.PLATFORM_PAIR }}
+
+      - name: Export digest (custom)
+        run: |
+          mkdir -p ${{ runner.temp }}/digests/custom
+          digest="${{ steps.build-custom.outputs.digest }}"
+          touch "${{ runner.temp }}/digests/custom/${digest#sha256:}"
+
+      # ---- Upload all digests ----
+      - name: Upload digests
         uses: actions/upload-artifact@v4
         with:
           name: digests-${{ env.PLATFORM_PAIR }}
-          path: ${{ runner.temp }}/digests/*
+          path: ${{ runner.temp }}/digests/
           if-no-files-found: error
           retention-days: 1
 
@@ -116,30 +190,71 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Extract metadata (tags, labels)
-        id: meta
+      # ---- Merge: latest ----
+      - name: Extract metadata (latest)
+        id: meta-latest
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.DOCKERHUB_REPO }}
           tags: |
-            # semver tags: v1.2.3 -> 1.2.3, 1.2, 1
             type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}.{{patch}}
             type=semver,pattern={{major}}.{{minor}}
-            # latest on every push to main (publish last so it lists at top)
-            type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=latest
 
-      - name: Create manifest list and push
-        working-directory: ${{ runner.temp }}/digests
+      - name: Create manifest (latest)
+        working-directory: ${{ runner.temp }}/digests/latest
         run: |
           docker buildx imagetools create \
             $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
             $(printf '${{ env.DOCKERHUB_REPO }}@sha256:%s ' *)
 
-      - name: Inspect image
-        run: |
-          docker buildx imagetools inspect \
-            ${{ env.DOCKERHUB_REPO }}:${{ steps.meta.outputs.version }}
+      # ---- Merge: nossl ----
+      - name: Extract metadata (nossl)
+        id: meta-nossl
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.DOCKERHUB_REPO }}
+          tags: |
+            type=semver,pattern={{version}},suffix=-nossl
+            type=semver,pattern={{major}}.{{minor}}.{{patch}},suffix=-nossl
+            type=semver,pattern={{major}}.{{minor}},suffix=-nossl
+            type=raw,value=nossl
 
+      - name: Create manifest (nossl)
+        working-directory: ${{ runner.temp }}/digests/nossl
+        run: |
+          docker buildx imagetools create \
+            $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
+            $(printf '${{ env.DOCKERHUB_REPO }}@sha256:%s ' *)
+
+      # ---- Merge: custom ----
+      - name: Extract metadata (custom)
+        id: meta-custom
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.DOCKERHUB_REPO }}
+          tags: |
+            type=semver,pattern={{version}},suffix=-custom
+            type=semver,pattern={{major}}.{{minor}}.{{patch}},suffix=-custom
+            type=semver,pattern={{major}}.{{minor}},suffix=-custom
+            type=raw,value=custom
+
+      - name: Create manifest (custom)
+        working-directory: ${{ runner.temp }}/digests/custom
+        run: |
+          docker buildx imagetools create \
+            $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
+            $(printf '${{ env.DOCKERHUB_REPO }}@sha256:%s ' *)
+
+      # ---- Inspect ----
+      - name: Inspect images
+        run: |
+          docker buildx imagetools inspect ${{ env.DOCKERHUB_REPO }}:${{ steps.meta-latest.outputs.version }}
+          docker buildx imagetools inspect ${{ env.DOCKERHUB_REPO }}:${{ steps.meta-nossl.outputs.version }}-nossl
+          docker buildx imagetools inspect ${{ env.DOCKERHUB_REPO }}:${{ steps.meta-custom.outputs.version }}-custom
+
+      # ---- Sync README ----
       - name: Sync README to Docker Hub
         uses: peter-evans/dockerhub-description@v4
         with:
