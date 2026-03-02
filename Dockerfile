@@ -105,7 +105,10 @@ RUN --mount=type=secret,id=actions_cache_url \
       else echo clear; fi)" \
     ACTIONS_CACHE_URL="$(cat /run/secrets/actions_cache_url 2>/dev/null || true)" \
     ACTIONS_RUNTIME_TOKEN="$(cat /run/secrets/actions_runtime_token 2>/dev/null || true)" \
-    cmake --preset ssl && cmake --build --preset ssl
+    (cmake --preset ssl && cmake --build --preset ssl) \
+    || { echo "=== SSL build failed, dumping error logs ==="; \
+         find /opt/vcpkg/buildtrees/busyq-curl/ -name '*.log' -newer /src/build -exec sh -c 'echo "--- {} ---"; tail -40 "{}"' \; 2>/dev/null; \
+         exit 1; }
 
 # Strip and compress binary; also copy library artifact
 RUN strip --strip-all build/ssl/busyq \
