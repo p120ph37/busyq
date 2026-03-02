@@ -3,11 +3,14 @@
  *
  * Detects data appended after the ELF binary ("overlay") by parsing
  * the ELF headers to find the logical end of the file.  Works for
- * both regular and UPX-compressed binaries (UPX produces valid ELF
- * files with no section headers, so we handle that case).
+ * both regular and UPX-compressed binaries.
  *
- * Gzip-compressed overlays are auto-detected (magic 0x1f 0x8b) and
- * transparently decompressed using zlib.
+ * For UPX-compressed binaries, UPX metadata after the ELF segments
+ * is automatically detected and skipped by scanning forward for
+ * valid script content (gzip magic or printable text).
+ *
+ * The overlay payload may be raw script text or gzip-compressed
+ * data (auto-detected via 0x1f 0x8b magic).
  */
 
 #include "overlay.h"
@@ -175,13 +178,103 @@ static char *gunzip(const unsigned char *data, size_t len, size_t *out_len)
     return buf;
 }
 
+/*
+ * Check if the ELF binary was compressed with UPX.
+ *
+ * UPX places an l_info structure immediately after the program header
+ * table.  The l_magic field (at offset 4 within l_info) contains
+ * "UPX!" (0x55505821) for UPX-compressed binaries.
+ */
+static int is_upx_binary(int fd)
+{
+    Elf64_Ehdr ehdr;
+    unsigned char magic[4];
+    off_t l_info_off;
+
+    if (pread(fd, &ehdr, sizeof(ehdr), 0) != (ssize_t)sizeof(ehdr))
+        return 0;
+    if (memcmp(ehdr.e_ident, ELFMAG, SELFMAG) != 0)
+        return 0;
+    if (ehdr.e_ident[EI_CLASS] != ELFCLASS64)
+        return 0;
+
+    /* l_info is right after the program header table */
+    l_info_off = (off_t)ehdr.e_phoff +
+                 (off_t)ehdr.e_phnum * ehdr.e_phentsize;
+
+    /* l_magic is at offset 4 within l_info */
+    if (pread(fd, magic, 4, l_info_off + 4) != 4)
+        return 0;
+
+    return magic[0] == 'U' && magic[1] == 'P' &&
+           magic[2] == 'X' && magic[3] == '!';
+}
+
+/*
+ * Check if a byte is a valid text character (printable ASCII,
+ * tab, newline, or carriage return).
+ */
+static int is_text_byte(unsigned char c)
+{
+    return (c >= 0x20 && c <= 0x7e) ||
+           c == '\t' || c == '\n' || c == '\r';
+}
+
+/*
+ * Find the start of a script overlay within post-ELF data, skipping
+ * any leading binary metadata (e.g. UPX pack header and overlay offset).
+ *
+ * Scans forward looking for:
+ *   1. Gzip magic (0x1f 0x8b) — indicates gzip-compressed script
+ *   2. 16+ consecutive valid text bytes — indicates raw script text
+ *
+ * UPX metadata is typically ~36 bytes of structured binary data
+ * (pack header + overlay offset), which fails both checks.
+ *
+ * Returns the byte offset, or (size_t)-1 if no script found.
+ */
+#define OVERLAY_TEXT_MIN 16   /* min consecutive text bytes for detection */
+#define OVERLAY_SCAN_MAX 256  /* max bytes to scan for overlay start */
+
+static size_t find_script_start(const unsigned char *data, size_t len)
+{
+    size_t off;
+    size_t limit = len < OVERLAY_SCAN_MAX ? len : OVERLAY_SCAN_MAX;
+
+    for (off = 0; off < limit; off++) {
+        /* Check for gzip magic */
+        if (off + 1 < len &&
+            data[off] == 0x1f && data[off + 1] == 0x8b)
+            return off;
+
+        /* Check for consecutive valid text bytes */
+        if (off + OVERLAY_TEXT_MIN <= len) {
+            size_t i;
+            int valid = 1;
+            for (i = 0; i < OVERLAY_TEXT_MIN; i++) {
+                if (!is_text_byte(data[off + i])) {
+                    valid = 0;
+                    break;
+                }
+            }
+            if (valid)
+                return off;
+        }
+    }
+
+    return (size_t)-1;
+}
+
 char *busyq_load_overlay(size_t *out_len)
 {
     int fd;
     struct stat st;
     off_t elf_end;
     size_t overlay_len;
-    char *overlay;
+    unsigned char *raw;
+    unsigned char *data;
+    size_t data_len;
+    int upx;
     char *script;
 
     fd = open("/proc/self/exe", O_RDONLY);
@@ -200,35 +293,59 @@ char *busyq_load_overlay(size_t *out_len)
     }
 
     overlay_len = (size_t)(st.st_size - elf_end);
-    if (overlay_len == 0) {
+
+    /* Read all post-ELF data */
+    raw = malloc(overlay_len);
+    if (!raw) {
         close(fd);
         return NULL;
     }
 
-    overlay = malloc(overlay_len + 1);
-    if (!overlay) {
+    if (pread(fd, raw, overlay_len, elf_end) != (ssize_t)overlay_len) {
+        free(raw);
         close(fd);
         return NULL;
     }
 
-    if (pread(fd, overlay, overlay_len, elf_end) != (ssize_t)overlay_len) {
-        free(overlay);
-        close(fd);
-        return NULL;
-    }
+    /* Detect UPX compression */
+    upx = is_upx_binary(fd);
     close(fd);
 
+    data = raw;
+    data_len = overlay_len;
+
+    if (upx) {
+        /*
+         * UPX leaves metadata after ELF segments (pack header +
+         * overlay offset, typically ~36 bytes).  Scan forward to
+         * find where the actual script data begins.
+         */
+        size_t script_off = find_script_start(raw, overlay_len);
+        if (script_off == (size_t)-1) {
+            free(raw);
+            return NULL;  /* UPX metadata only, no script overlay */
+        }
+        data = raw + script_off;
+        data_len = overlay_len - script_off;
+    }
+
     /* Auto-detect gzip: magic bytes 0x1f 0x8b */
-    if (overlay_len >= 2 &&
-        (unsigned char)overlay[0] == 0x1f &&
-        (unsigned char)overlay[1] == 0x8b) {
-        script = gunzip((unsigned char *)overlay, overlay_len, out_len);
-        free(overlay);
+    if (data_len >= 2 &&
+        data[0] == 0x1f && data[1] == 0x8b) {
+        script = gunzip(data, data_len, out_len);
+        free(raw);
         return script;  /* NULL on decompress error */
     }
 
-    /* Not compressed — use as-is, null-terminate */
-    overlay[overlay_len] = '\0';
-    *out_len = overlay_len;
-    return overlay;
+    /* Not compressed — copy, null-terminate, return */
+    script = malloc(data_len + 1);
+    if (!script) {
+        free(raw);
+        return NULL;
+    }
+    memcpy(script, data, data_len);
+    script[data_len] = '\0';
+    *out_len = data_len;
+    free(raw);
+    return script;
 }
