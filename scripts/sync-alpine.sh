@@ -60,6 +60,7 @@ PORT_MAP[busyq-procps]="main/procps-ng"
 PORT_MAP[busyq-psmisc]="main/psmisc"
 # Phase 7: util-linux
 PORT_MAP[busyq-util-linux]="main/util-linux"
+PORT_MAP[busyq-xxd]="main/vim"
 
 usage() {
     echo "Usage: $0 <aports-dir> [port-name...]"

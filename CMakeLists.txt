@@ -99,6 +99,9 @@ _busyq_find(LIB_WHOIS      whois)
 # util-linux (Phase 7)
 _busyq_find(LIB_UTILLINUX  utillinux)
 
+# xxd (from vim)
+_busyq_find(LIB_XXD        xxd)
+
 # Process utilities
 _busyq_find(LIB_PROCPS     procps)
 _busyq_find(LIB_PSMISC     psmisc)
@@ -215,7 +218,7 @@ target_include_directories(busyq PRIVATE
 )
 
 if(BUSYQ_SSL)
-    target_compile_definitions(busyq PRIVATE BUSYQ_SSL)
+    target_compile_definitions(busyq PRIVATE BUSYQ_SSL APPLET_ssl_client=1)
 endif()
 
 if(BUSYQ_OVERLAY)

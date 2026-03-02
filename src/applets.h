@@ -70,7 +70,7 @@
  *                nologin, nsenter, prlimit, rename, renice, rev, script,
  *                scriptlive, scriptreplay, setsid, taskset, ul, unshare,
  *                uuidgen, uuidparse, whereis)
- *   xxd        - busyq-xxd: libxxd (xxd) — separate port from vim, not yet implemented
+ *   xxd        - busyq-xxd: libxxd (xxd) — standalone tool from vim source tree
  */
 
 /* ---- If APPLET was not defined by the includer, provide a no-op ---- */
@@ -540,6 +540,9 @@
 #ifndef APPLET_split
 #define APPLET_split _BQ_DEFAULT
 #endif
+#ifndef APPLET_ssl_client
+#define APPLET_ssl_client 0  /* requires BUSYQ_SSL; enabled via CMakeLists.txt */
+#endif
 #ifndef APPLET_stat
 #define APPLET_stat _BQ_DEFAULT
 #endif
@@ -682,7 +685,7 @@
 #define APPLET_xargs _BQ_DEFAULT
 #endif
 #ifndef APPLET_xxd
-#define APPLET_xxd 0  /* requires busyq-xxd port (from vim) */
+#define APPLET_xxd _BQ_DEFAULT
 #endif
 #ifndef APPLET_xz
 #define APPLET_xz _BQ_DEFAULT
@@ -934,7 +937,7 @@ _BQ_IF(APPLET_who)(APPLET(coreutils, who, single_binary_main_who))
 _BQ_IF(APPLET_whoami)(APPLET(coreutils, whoami, single_binary_main_whoami))
 _BQ_IF(APPLET_whois)(APPLET(whois, whois, whois_main))
 _BQ_IF(APPLET_xargs)(APPLET(findutils, xargs, xargs_main))
-_BQ_IF(APPLET_xxd)(APPLET(utillinux, xxd, xxd_main))
+_BQ_IF(APPLET_xxd)(APPLET(xxd, xxd, xxd_main))
 _BQ_IF(APPLET_xz)(APPLET(xz, xz, xz_main))
 _BQ_IF(APPLET_xz)(APPLET(xz, xzcat, xz_main))
 _BQ_IF(APPLET_yes)(APPLET(coreutils, yes, single_binary_main_yes))
