@@ -5,9 +5,9 @@
  * the ELF headers to find the logical end of the file.  Works for
  * both regular and UPX-compressed binaries.
  *
- * For UPX-compressed binaries, UPX metadata after the ELF segments
- * is automatically detected and skipped by scanning forward for
- * valid script content (gzip magic or printable text).
+ * For UPX-compressed binaries, the 36-byte UPX trailer (PackHeader +
+ * overlay_offset) after the ELF segments is deterministically parsed
+ * and skipped.
  *
  * The overlay payload may be raw script text or gzip-compressed
  * data (auto-detected via 0x1f 0x8b magic).
@@ -211,58 +211,54 @@ static int is_upx_binary(int fd)
 }
 
 /*
- * Check if a byte is a valid text character (printable ASCII,
- * tab, newline, or carriage return).
+ * Compute the size of UPX's end-of-file trailer from post-ELF data.
+ *
+ * UPX's pack4() writes a PackHeader followed by a 4-byte overlay_offset
+ * as the very last data in the file (see p_unix.cpp in UPX source).
+ * The PackHeader starts with "UPX!" magic (0x55505821 LE32) and its
+ * size depends on the version and format fields at bytes 4-5:
+ *
+ *   version >= 10, non-DOS format:  32 bytes  (current UPX)
+ *   version  4-9, non-DOS format:   28 bytes
+ *   version <= 3:                    24 bytes
+ *
+ * Total trailer = PackHeader + 4-byte overlay_offset.
+ *
+ * Returns the trailer size in bytes, or 0 if the data doesn't start
+ * with a valid UPX PackHeader.
  */
-static int is_text_byte(unsigned char c)
+static size_t upx_trailer_size(const unsigned char *data, size_t len)
 {
-    return (c >= 0x20 && c <= 0x7e) ||
-           c == '\t' || c == '\n' || c == '\r';
-}
+    int version, format;
+    int phdr_size;
 
-/*
- * Find the start of a script overlay within post-ELF data, skipping
- * any leading binary metadata (e.g. UPX pack header and overlay offset).
- *
- * Scans forward looking for:
- *   1. Gzip magic (0x1f 0x8b) — indicates gzip-compressed script
- *   2. 16+ consecutive valid text bytes — indicates raw script text
- *
- * UPX metadata is typically ~36 bytes of structured binary data
- * (pack header + overlay offset), which fails both checks.
- *
- * Returns the byte offset, or (size_t)-1 if no script found.
- */
-#define OVERLAY_TEXT_MIN 16   /* min consecutive text bytes for detection */
-#define OVERLAY_SCAN_MAX 256  /* max bytes to scan for overlay start */
+    /* Need at least magic(4) + version/format(2) */
+    if (len < 6)
+        return 0;
 
-static size_t find_script_start(const unsigned char *data, size_t len)
-{
-    size_t off;
-    size_t limit = len < OVERLAY_SCAN_MAX ? len : OVERLAY_SCAN_MAX;
+    /* PackHeader starts with "UPX!" magic (LE32: 0x55505821) */
+    if (data[0] != 'U' || data[1] != 'P' ||
+        data[2] != 'X' || data[3] != '!')
+        return 0;
 
-    for (off = 0; off < limit; off++) {
-        /* Check for gzip magic */
-        if (off + 1 < len &&
-            data[off] == 0x1f && data[off + 1] == 0x8b)
-            return off;
+    version = data[4];
+    format = data[5];
 
-        /* Check for consecutive valid text bytes */
-        if (off + OVERLAY_TEXT_MIN <= len) {
-            size_t i;
-            int valid = 1;
-            for (i = 0; i < OVERLAY_TEXT_MIN; i++) {
-                if (!is_text_byte(data[off + i])) {
-                    valid = 0;
-                    break;
-                }
-            }
-            if (valid)
-                return off;
-        }
-    }
+    /* PackHeader size from UPX packhead.cpp getPackHeaderSize() */
+    if (version <= 3)
+        phdr_size = 24;
+    else if (format == 1 || format == 2)   /* UPX_F_DOS_COM, UPX_F_DOS_SYS */
+        phdr_size = (version <= 9) ? 20 : 22;
+    else if (format == 3 || format == 4)   /* UPX_F_DOS_EXE, UPX_F_DOS_EXEH */
+        phdr_size = (version <= 9) ? 25 : 27;
+    else                                   /* ELF and all other formats */
+        phdr_size = (version <= 9) ? 28 : 32;
 
-    return (size_t)-1;
+    /* Trailer = PackHeader + 4-byte overlay_offset */
+    if ((size_t)(phdr_size + 4) > len)
+        return 0;
+
+    return (size_t)(phdr_size + 4);
 }
 
 char *busyq_load_overlay(size_t *out_len)
@@ -316,17 +312,18 @@ char *busyq_load_overlay(size_t *out_len)
 
     if (upx) {
         /*
-         * UPX leaves metadata after ELF segments (pack header +
-         * overlay offset, typically ~36 bytes).  Scan forward to
-         * find where the actual script data begins.
+         * UPX appends a PackHeader (32 bytes for modern ELF) plus a
+         * 4-byte overlay_offset as the last data in the file, after
+         * all ELF structures.  Parse the trailer size exactly and
+         * skip it to find the user's overlay data.
          */
-        size_t script_off = find_script_start(raw, overlay_len);
-        if (script_off == (size_t)-1) {
+        size_t trailer = upx_trailer_size(raw, overlay_len);
+        if (trailer == 0 || trailer >= overlay_len) {
             free(raw);
             return NULL;  /* UPX metadata only, no script overlay */
         }
-        data = raw + script_off;
-        data_len = overlay_len - script_off;
+        data = raw + trailer;
+        data_len = overlay_len - trailer;
     }
 
     /* Auto-detect gzip: magic bytes 0x1f 0x8b */
