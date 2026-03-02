@@ -232,25 +232,37 @@ All GPL-3.0+.
 - [ ] Create `ports/busyq-lsof/portfile.cmake`
 - [ ] Commands: lsof
 
-### Phase 7: util-linux (DEFERRED)
-Decision pending. Candidate commands:
+### Phase 7: util-linux
+**Upstream**: util-linux 2.40.4 (GPL-2.0-or-later)
+- [x] Create `ports/busyq-util-linux/portfile.cmake`
+- [x] Add applet entries to applets.h
 
-> blkdiscard, cal, chrt, eject, fallocate, fdflush, findfs, flock, getopt,
-> hexdump, hd, ionice, ipcrm, ipcs, last, lsusb, mesg, mkdosfs, more,
-> mountpoint, nologin, nsenter, pivot_root, rdate, rdev, renice, rev,
-> setpriv, setsid, switch_root, taskset, unshare, xxd
+**Included tools (40)**:
 
-Also currently enabled but not yet categorized:
-> adjtimex, blkdiscard, cal, chattr, chrt, cryptpw, eject, fallocate,
-> fatattr, fbsplash, fdflush, findfs, flock, free (procps), getfattr,
-> getopt, hexdump, hexedit, ionice, ipcalc, ipcrm, ipcs, last, lsattr,
-> lsusb, mdev, mesg, microcom, mkdosfs, mkpasswd, more, mountpoint,
-> nologin, nsenter, partprobe, pivot_root, raidautorun, rdate, rdev,
-> readahead, renice, rev, setfattr, setpriv, setserial, setsid,
-> switch_root, taskset, tree, ttysize, unshare, volname, watchdog, xxd
+*misc-utils*: cal, flock, getopt, hardlink, logger, look, mcookie, namei,
+rename, uuidgen, uuidparse, whereis
 
-These will be dropped when busybox is removed. Add back selectively from
-util-linux (GPL-2.0+) as needed.
+*sys-utils*: chrt, fallocate, ionice, ipcmk, ipcrm, ipcs, lsns, mountpoint,
+nsenter, prlimit, renice, setsid, taskset, unshare
+
+*text-utils*: col, colcrt, colrm, column, hexdump (+ hd alias), more, rev, ul
+
+*term-utils*: mesg, script, scriptlive, scriptreplay
+
+*login-utils*: nologin
+
+*internal libs*: libuuid, libsmartcols
+
+*Also*: lscpu (sys-utils)
+
+**Not included** (and why):
+- Disk/partition tools (fdisk, cfdisk, sfdisk, blkid, mount, umount, losetup,
+  etc.) — require block device access, not useful in distroless containers
+- Login/PAM tools (login, su, sulogin, runuser, last, wall, write) — require
+  PAM/utmp, not applicable
+- Device tools (lsblk, lsusb, wipefs, mkswap, swaplabel) — require device access
+- setpriv, switch_root, pivot_root — require capabilities/root-only operations
+- xxd — not in util-linux; comes from vim (needs separate busyq-xxd port)
 
 ### Phase 8: vi editor (OPTIONAL)
 Busybox vi goes away in Phase 0. Options if vi is desired:
@@ -286,4 +298,4 @@ These busybox applets are intentionally not replaced:
 5. **Small tools** — low effort, fill gaps
 6. **Networking** — wget/ping/nc are high-value for containers
 7. **Process utils** — important for debugging but less critical for scripts
-8. **util-linux** — deferred pending decision
+8. **util-linux** — 40 selected tools (misc, sys, text, term utilities)
