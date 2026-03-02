@@ -19,7 +19,7 @@
  *
  *   Example (direct cc):
  *     cc -DBUSYQ_CUSTOM_APPLETS -DAPPLET_curl=1 -DAPPLET_jq=1 \
- *        -DAPPLET_ls=1 src/applets.c -Isrc/ libbusyq.a ...
+ *        -DAPPLET_ls=1 src/features.c -Isrc/ libbusyq.a ...
  *
  *   Example (cmake):
  *     cmake --preset no-ssl -DBUSYQ_APPLETS="curl;jq;ls"

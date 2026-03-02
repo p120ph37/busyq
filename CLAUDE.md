@@ -6,10 +6,12 @@ upstream GNU tools. Intended for distroless containers and script shebangs.
 Always launches as bash, with all bundled tools available as pseudo-builtins.
 
 ## Project layout
-- `src/` - C source for entry point, applet table, and scanner
+- `src/` - C source for entry point, feature gates, and scanner
 - `src/applets.h` - X-macro applet registry (single source of truth)
-- `src/applets.c` - Applet dispatch table (consumes applets.h, handles filtering)
-- `src/applet_table.h` - Shared struct/API for applet lookup
+- `src/features.c` - Feature gates + applet dispatch (the lightweight recompile target)
+- `src/applet_table.h` - Shared struct/API for applet lookup + feature thunks
+- `src/overlay.c` - Embedded script overlay support (ELF parsing, UPX, gzip)
+- `src/overlay.h` - Overlay API (busyq_load_overlay)
 - `src/busyq_scan_main.c` - Scanner binary entry point + classifier
 - `src/busyq_scan_walk.c` - AST walker (compiled within bash port)
 - `src/busyq_scan.h` - Shared types for scanner components
@@ -43,9 +45,9 @@ cmake --preset no-ssl -DBUSYQ_APPLETS="cat;curl;jq;ls;mkdir;sort"
 cmake --build --preset no-ssl
 
 # 3b. Or link against the pre-built library (fast, no vcpkg needed)
-cc -DBUSYQ_CUSTOM_APPLETS -DAPPLET_cat=1 -DAPPLET_curl=1 -DAPPLET_jq=1 \
-   -DAPPLET_ls=1 -DAPPLET_mkdir=1 -DAPPLET_sort=1 \
-   -flto -static -Os src/applets.c -Isrc/ libbusyq.a -lm -ldl -lpthread -o busyq
+cc -DBUSYQ_CUSTOM_APPLETS -DBUSYQ_OVERLAY -DAPPLET_cat=1 -DAPPLET_curl=1 \
+   -DAPPLET_jq=1 -DAPPLET_ls=1 -DAPPLET_mkdir=1 -DAPPLET_sort=1 \
+   -flto -static -Os src/features.c -Isrc/ libbusyq.a -lm -ldl -lpthread -o busyq
 ```
 
 ### Build architecture (vcpkg overlay ports)
@@ -64,9 +66,11 @@ and build orchestration. The top-level CMakeLists.txt links everything together.
 - Bash command lookup patched in findcmd.c to check applet table before PATH
 - Entry point always calls bash_main(); bash's own sh/POSIX-mode logic preserved
 - Tool main() functions renamed via -Dmain=toolname_main at compile time
-- All tools registered in src/applets.h (X-macro) and dispatched via src/applets.c
+- All tools registered in src/applets.h (X-macro) and dispatched via src/features.c
 - Applet filtering at compile time: -DBUSYQ_CUSTOM_APPLETS + -DAPPLET_<name>=1
   allows LTO to strip unreferenced entry functions (no code generation needed)
+- Feature gates in src/features.c: compile-time defines (-DBUSYQ_OVERLAY, etc.)
+  control thunks that LTO uses to prune entire subsystems from the final binary
 - Coreutils uses per-command entry points (single_binary_main_*) instead of a
   shared dispatcher, enabling LTO to prune unused commands in custom builds
 
