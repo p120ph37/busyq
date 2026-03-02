@@ -63,13 +63,15 @@
  *   procps     - busyq-procps: libprocps (ps, free, top, pgrep, etc.)
  *   psmisc     - busyq-psmisc: libpsmisc (killall, fuser, pstree)
  *   lsof       - busyq-lsof: liblsof
- *   utillinux  - busyq-util-linux: libutillinux (cal, chrt, col, colcrt,
- *                colrm, column, fallocate, flock, getopt, hardlink,
- *                hexdump, ionice, ipcmk, ipcrm, ipcs, logger, look,
- *                lscpu, lsns, mcookie, mesg, more, mountpoint, namei,
- *                nologin, nsenter, prlimit, rename, renice, rev, script,
- *                scriptlive, scriptreplay, setsid, taskset, ul, unshare,
- *                uuidgen, uuidparse, whereis)
+ *   utillinux  - busyq-util-linux: libutillinux (cal, choom, chrt, col,
+ *                colcrt, colrm, column, exch, fadvise, fallocate, fincore,
+ *                findmnt, flock, getopt, hardlink, hexdump, ionice, ipcmk,
+ *                ipcrm, ipcs, logger, look, lsclocks, lscpu, lsfd, lsipc,
+ *                lslocks, lsns, mcookie, mesg, more, mountpoint, namei,
+ *                nologin, nsenter, pipesz, prlimit, rename, renice, rev,
+ *                script, scriptlive, scriptreplay, setarch, setpgid,
+ *                setsid, taskset, uclampset, ul, unshare, uuidgen,
+ *                uuidparse, waitpid, whereis)
  *   xxd        - busyq-xxd: libxxd (xxd) — standalone tool from vim source tree
  */
 
@@ -134,6 +136,9 @@
 #endif
 #ifndef APPLET_chmod
 #define APPLET_chmod _BQ_DEFAULT
+#endif
+#ifndef APPLET_choom
+#define APPLET_choom _BQ_DEFAULT
 #endif
 #ifndef APPLET_chown
 #define APPLET_chown _BQ_DEFAULT
@@ -222,6 +227,9 @@
 #ifndef APPLET_env
 #define APPLET_env _BQ_DEFAULT
 #endif
+#ifndef APPLET_exch
+#define APPLET_exch _BQ_DEFAULT
+#endif
 #ifndef APPLET_expand
 #define APPLET_expand _BQ_DEFAULT
 #endif
@@ -231,14 +239,25 @@
 #ifndef APPLET_factor
 #define APPLET_factor _BQ_DEFAULT
 #endif
+#ifndef APPLET_fadvise
+#define APPLET_fadvise _BQ_DEFAULT
+#endif
+#define APPLET_factor _BQ_DEFAULT
+#endif
 #ifndef APPLET_fallocate
 #define APPLET_fallocate _BQ_DEFAULT
 #endif
 #ifndef APPLET_false
 #define APPLET_false _BQ_DEFAULT
 #endif
+#ifndef APPLET_fincore
+#define APPLET_fincore _BQ_DEFAULT
+#endif
 #ifndef APPLET_find
 #define APPLET_find _BQ_DEFAULT
+#endif
+#ifndef APPLET_findmnt
+#define APPLET_findmnt _BQ_DEFAULT
 #endif
 #ifndef APPLET_flock
 #define APPLET_flock _BQ_DEFAULT
@@ -336,8 +355,20 @@
 #ifndef APPLET_ls
 #define APPLET_ls _BQ_DEFAULT
 #endif
+#ifndef APPLET_lsclocks
+#define APPLET_lsclocks _BQ_DEFAULT
+#endif
 #ifndef APPLET_lscpu
 #define APPLET_lscpu _BQ_DEFAULT
+#endif
+#ifndef APPLET_lsfd
+#define APPLET_lsfd _BQ_DEFAULT
+#endif
+#ifndef APPLET_lsipc
+#define APPLET_lsipc _BQ_DEFAULT
+#endif
+#ifndef APPLET_lslocks
+#define APPLET_lslocks _BQ_DEFAULT
 #endif
 #ifndef APPLET_lsns
 #define APPLET_lsns _BQ_DEFAULT
@@ -429,6 +460,9 @@
 #ifndef APPLET_pinky
 #define APPLET_pinky _BQ_DEFAULT
 #endif
+#ifndef APPLET_pipesz
+#define APPLET_pipesz _BQ_DEFAULT
+#endif
 #ifndef APPLET_pmap
 #define APPLET_pmap _BQ_DEFAULT
 #endif
@@ -503,6 +537,12 @@
 #endif
 #ifndef APPLET_seq
 #define APPLET_seq _BQ_DEFAULT
+#endif
+#ifndef APPLET_setarch
+#define APPLET_setarch _BQ_DEFAULT
+#endif
+#ifndef APPLET_setpgid
+#define APPLET_setpgid _BQ_DEFAULT
 #endif
 #ifndef APPLET_setsid
 #define APPLET_setsid _BQ_DEFAULT
@@ -609,6 +649,9 @@
 #ifndef APPLET_tty
 #define APPLET_tty _BQ_DEFAULT
 #endif
+#ifndef APPLET_uclampset
+#define APPLET_uclampset _BQ_DEFAULT
+#endif
 #ifndef APPLET_ul
 #define APPLET_ul _BQ_DEFAULT
 #endif
@@ -656,6 +699,9 @@
 #endif
 #ifndef APPLET_w
 #define APPLET_w _BQ_DEFAULT
+#endif
+#ifndef APPLET_waitpid
+#define APPLET_waitpid _BQ_DEFAULT
 #endif
 #ifndef APPLET_watch
 #define APPLET_watch _BQ_DEFAULT
@@ -743,6 +789,7 @@ _BQ_IF(APPLET_cat)(APPLET(coreutils, cat, single_binary_main_cat))
 _BQ_IF(APPLET_chcon)(APPLET(coreutils, chcon, single_binary_main_chcon))
 _BQ_IF(APPLET_chgrp)(APPLET(coreutils, chgrp, single_binary_main_chgrp))
 _BQ_IF(APPLET_chmod)(APPLET(coreutils, chmod, single_binary_main_chmod))
+_BQ_IF(APPLET_choom)(APPLET(utillinux, choom, choom_main))
 _BQ_IF(APPLET_chown)(APPLET(coreutils, chown, single_binary_main_chown))
 _BQ_IF(APPLET_chroot)(APPLET(coreutils, chroot, single_binary_main_chroot))
 _BQ_IF(APPLET_chrt)(APPLET(utillinux, chrt, chrt_main))
@@ -773,13 +820,17 @@ _BQ_IF(APPLET_echo)(APPLET(coreutils, echo, single_binary_main_echo))
 _BQ_IF(APPLET_ed)(APPLET(ed, ed, ed_main))
 _BQ_IF(APPLET_grep)(APPLET(grep, egrep, grep_main))
 _BQ_IF(APPLET_env)(APPLET(coreutils, env, single_binary_main_env))
+_BQ_IF(APPLET_exch)(APPLET(utillinux, exch, exch_main))
 _BQ_IF(APPLET_expand)(APPLET(coreutils, expand, single_binary_main_expand))
 _BQ_IF(APPLET_expr)(APPLET(coreutils, expr, single_binary_main_expr))
 _BQ_IF(APPLET_factor)(APPLET(coreutils, factor, single_binary_main_factor))
+_BQ_IF(APPLET_fadvise)(APPLET(utillinux, fadvise, fadvise_main))
 _BQ_IF(APPLET_fallocate)(APPLET(utillinux, fallocate, fallocate_main))
 _BQ_IF(APPLET_false)(APPLET(coreutils, false, single_binary_main_false))
 _BQ_IF(APPLET_grep)(APPLET(grep, fgrep, grep_main))
+_BQ_IF(APPLET_fincore)(APPLET(utillinux, fincore, fincore_main))
 _BQ_IF(APPLET_find)(APPLET(findutils, find, find_main))
+_BQ_IF(APPLET_findmnt)(APPLET(utillinux, findmnt, findmnt_main))
 _BQ_IF(APPLET_flock)(APPLET(utillinux, flock, flock_main))
 _BQ_IF(APPLET_fmt)(APPLET(coreutils, fmt, single_binary_main_fmt))
 _BQ_IF(APPLET_fold)(APPLET(coreutils, fold, single_binary_main_fold))
@@ -809,12 +860,18 @@ _BQ_IF(APPLET_kill)(APPLET(coreutils, kill, single_binary_main_kill))
 _BQ_IF(APPLET_killall)(APPLET(psmisc, killall, killall_main))
 _BQ_IF(APPLET_less)(APPLET(less, less, less_main))
 _BQ_IF(APPLET_link)(APPLET(coreutils, link, single_binary_main_link))
+_BQ_IF(APPLET_setarch)(APPLET(utillinux, linux32, setarch_main))
+_BQ_IF(APPLET_setarch)(APPLET(utillinux, linux64, setarch_main))
 _BQ_IF(APPLET_ln)(APPLET(coreutils, ln, single_binary_main_ln))
 _BQ_IF(APPLET_logger)(APPLET(utillinux, logger, logger_main))
 _BQ_IF(APPLET_logname)(APPLET(coreutils, logname, single_binary_main_logname))
 _BQ_IF(APPLET_look)(APPLET(utillinux, look, look_main))
 _BQ_IF(APPLET_ls)(APPLET(coreutils, ls, single_binary_main_ls))
+_BQ_IF(APPLET_lsclocks)(APPLET(utillinux, lsclocks, lsclocks_main))
 _BQ_IF(APPLET_lscpu)(APPLET(utillinux, lscpu, lscpu_main))
+_BQ_IF(APPLET_lsfd)(APPLET(utillinux, lsfd, lsfd_main))
+_BQ_IF(APPLET_lsipc)(APPLET(utillinux, lsipc, lsipc_main))
+_BQ_IF(APPLET_lslocks)(APPLET(utillinux, lslocks, lslocks_main))
 _BQ_IF(APPLET_lsns)(APPLET(utillinux, lsns, lsns_main))
 _BQ_IF(APPLET_lsof)(APPLET(lsof, lsof, lsof_main))
 _BQ_IF(APPLET_xz)(APPLET(xz, lzcat, xz_main))
@@ -847,6 +904,7 @@ _BQ_IF(APPLET_pgrep)(APPLET(procps, pgrep, pgrep_main))
 _BQ_IF(APPLET_pidof)(APPLET(procps, pidof, pidof_main))
 _BQ_IF(APPLET_ping)(APPLET(iputils, ping, ping_main))
 _BQ_IF(APPLET_pinky)(APPLET(coreutils, pinky, single_binary_main_pinky))
+_BQ_IF(APPLET_pipesz)(APPLET(utillinux, pipesz, pipesz_main))
 _BQ_IF(APPLET_pgrep)(APPLET(procps, pkill, pgrep_main))
 _BQ_IF(APPLET_pmap)(APPLET(procps, pmap, pmap_main))
 _BQ_IF(APPLET_pr)(APPLET(coreutils, pr, single_binary_main_pr))
@@ -873,6 +931,8 @@ _BQ_IF(APPLET_scriptreplay)(APPLET(utillinux, scriptreplay, scriptreplay_main))
 _BQ_IF(APPLET_sdiff)(APPLET(diffutils, sdiff, sdiff_main))
 _BQ_IF(APPLET_sed)(APPLET(sed, sed, sed_main))
 _BQ_IF(APPLET_seq)(APPLET(coreutils, seq, single_binary_main_seq))
+_BQ_IF(APPLET_setarch)(APPLET(utillinux, setarch, setarch_main))
+_BQ_IF(APPLET_setpgid)(APPLET(utillinux, setpgid, setpgid_main))
 _BQ_IF(APPLET_setsid)(APPLET(utillinux, setsid, setsid_main))
 _BQ_IF(APPLET_sha1sum)(APPLET(coreutils, sha1sum, single_binary_main_sha1sum))
 _BQ_IF(APPLET_sha224sum)(APPLET(coreutils, sha224sum, single_binary_main_sha224sum))
@@ -909,6 +969,7 @@ _BQ_IF(APPLET_truncate)(APPLET(coreutils, truncate, single_binary_main_truncate)
 _BQ_IF(APPLET_reset)(APPLET(reset, tset, tset_main))
 _BQ_IF(APPLET_tsort)(APPLET(coreutils, tsort, single_binary_main_tsort))
 _BQ_IF(APPLET_tty)(APPLET(coreutils, tty, single_binary_main_tty))
+_BQ_IF(APPLET_uclampset)(APPLET(utillinux, uclampset, uclampset_main))
 _BQ_IF(APPLET_ul)(APPLET(utillinux, ul, ul_main))
 _BQ_IF(APPLET_uname)(APPLET(coreutils, uname, single_binary_main_uname))
 _BQ_IF(APPLET_unexpand)(APPLET(coreutils, unexpand, single_binary_main_unexpand))
@@ -928,6 +989,7 @@ _BQ_IF(APPLET_uuidparse)(APPLET(utillinux, uuidparse, uuidparse_main))
 _BQ_IF(APPLET_vdir)(APPLET(coreutils, vdir, single_binary_main_vdir))
 _BQ_IF(APPLET_vmstat)(APPLET(procps, vmstat, vmstat_main))
 _BQ_IF(APPLET_w)(APPLET(procps, w, w_main))
+_BQ_IF(APPLET_waitpid)(APPLET(utillinux, waitpid, waitpid_main))
 _BQ_IF(APPLET_watch)(APPLET(procps, watch, watch_main))
 _BQ_IF(APPLET_wc)(APPLET(coreutils, wc, single_binary_main_wc))
 _BQ_IF(APPLET_wget)(APPLET(wget, wget, wget_main))
