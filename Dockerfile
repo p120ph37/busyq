@@ -13,6 +13,15 @@
 #   docker buildx build --output=out .
 #
 # The output directory will contain binaries, libraries, and dev files.
+#
+# Caching strategy:
+#   The build stage uses a two-phase COPY to enable Docker layer caching
+#   for vcpkg package installation.  Phase 1 copies only the package
+#   manifest (vcpkg.json, ports/, CMakeLists.txt) and runs cmake configure
+#   to trigger vcpkg install.  Phase 2 copies the real source files and
+#   builds.  Since vcpkg_installed/ is in .dockerignore, pre-installed
+#   packages survive the Phase 2 COPY and vcpkg install becomes a no-op.
+#   This avoids ~15 min of package rebuilds when only source files change.
 
 # ============================================================
 # Stage 1: Build environment
@@ -43,9 +52,30 @@ RUN apk add --no-cache \
     patch \
     gettext-dev
 
-# Copy project files
-COPY . /src
+# ---- Phase 1: Pre-install vcpkg packages (cached until ports/manifest change) ----
+# Copy only files needed for dependency resolution.  Source files are NOT
+# needed for vcpkg package installation — cmake just needs CMakeLists.txt
+# to know which packages to find, and vcpkg.json + ports/ for the manifest.
+COPY vcpkg.json CMakePresets.json CMakeLists.txt /src/
+COPY ports/ /src/ports/
 WORKDIR /src
+
+# Create source stubs so cmake configure can parse CMakeLists.txt.
+# cmake records source paths at configure time but doesn't compile until build.
+RUN mkdir -p src && \
+    touch src/main.c src/features.c src/overlay.c \
+          src/busyq_scan_main.c src/ssl_client_mbedtls.c \
+          src/features.h src/applets.h src/overlay.h src/busyq_scan.h
+
+# Configure no-ssl preset: triggers vcpkg to install all base packages.
+# This layer is cached as long as vcpkg.json, ports/, and CMakeLists.txt
+# haven't changed, saving ~15 minutes of package compilation on each run.
+RUN cmake --preset no-ssl
+
+# ---- Phase 2: Build with real sources ----
+# vcpkg_installed/ and build/ are in .dockerignore, so pre-installed
+# packages and cmake cache from Phase 1 survive this COPY.
+COPY . /src
 
 # Validate applets.h sort order (binary search requires lexicographic order)
 RUN grep '_BQ_IF(APPLET_' src/applets.h | grep 'APPLET(' | \
@@ -54,8 +84,8 @@ RUN grep '_BQ_IF(APPLET_' src/applets.h | grep 'APPLET(' | \
     || (echo "ERROR: src/applets.h entries are not sorted by command name" && exit 1)
 
 # ---- Build variant 1: no SSL ----
-# CMakePresets.json configures the vcpkg toolchain file, which handles
-# package installation (via vcpkg.json manifest) during cmake configure.
+# cmake reconfigures with real sources; vcpkg install is a no-op
+# (base packages already installed from Phase 1).
 RUN cmake --preset no-ssl && cmake --build --preset no-ssl
 
 # Strip and compress binaries; also copy library artifact (keep a pre-UPX copy for overlay tests)
@@ -75,7 +105,13 @@ RUN scripts/generate-certs.sh src
 
 # The "ssl" preset sets VCPKG_MANIFEST_FEATURES=ssl, which tells vcpkg
 # to install the ssl feature dependencies (mbedtls, curl[ssl]).
-RUN cmake --preset ssl && cmake --build --preset ssl
+RUN cmake --preset ssl && cmake --build --preset ssl \
+    || { echo "=== SSL build failed, dumping vcpkg logs ===" >&2; \
+         for f in /opt/vcpkg/buildtrees/busyq-curl/curlmain-build-*-err.log \
+                  /opt/vcpkg/buildtrees/busyq-curl/*-rel-curlmain/build_curlmain.sh \
+                  /opt/vcpkg/buildtrees/busyq-curl/*-rel/lib/curl_config.h; do \
+             [ -f "$f" ] && echo "--- $f ---" >&2 && cat "$f" >&2; \
+         done; false; }
 
 # Strip and compress binary; also copy library artifact
 RUN strip --strip-all build/ssl/busyq \
