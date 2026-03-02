@@ -18,7 +18,7 @@ project(busyq C)
 #   1. Build libbusyq.a once (expensive: vcpkg ports + LTO compilation)
 #   2. Run:  busyq-scan myscript.sh --applets
 #   3. Compile: cc -DBUSYQ_CUSTOM_APPLETS -DAPPLET_curl=1 -DAPPLET_ls=1 \
-#               -flto -static -Os src/applets.c -Isrc/ libbusyq.a \
+#               -flto -static -Os src/features.c -Isrc/ libbusyq.a \
 #               -lm -ldl -lpthread -o busyq
 #      (Fast: no vcpkg rebuild, just compile one .c + final link w/ LTO)
 
@@ -154,21 +154,20 @@ if(BUSYQ_SSL)
     endif()
 endif()
 
-# Overlay: embedded script detection (uses zlib already linked via component libs)
-if(BUSYQ_OVERLAY)
-    target_sources(busyq_main PRIVATE src/overlay.c)
-    target_compile_definitions(busyq_main PRIVATE BUSYQ_OVERLAY)
-endif()
+# Overlay: always compiled into the library so it's available for custom builds.
+# Enabled/disabled via BUSYQ_OVERLAY define on features.c (not main.c), allowing
+# LTO to prune the overlay code when the feature gate returns NULL.
+target_sources(busyq_main PRIVATE src/overlay.c)
 
 # =====================================================================
 # libbusyq.a — merged archive of main.o + all component libraries
 #
-# Contains everything needed for a busyq binary EXCEPT the applet
-# dispatch table (applets.c).  Distributed as an LTO-enabled
-# artifact so users can link a custom applet table quickly:
+# Contains everything needed for a busyq binary EXCEPT the feature
+# gates and applet table (features.c).  Distributed as an LTO-enabled
+# artifact so users can link a custom features.c quickly:
 #
 #   cc -DBUSYQ_CUSTOM_APPLETS -DAPPLET_curl=1 -flto -static \
-#      src/applets.c -Isrc/ libbusyq.a -lm -ldl -lpthread -o busyq
+#      src/features.c -Isrc/ libbusyq.a -lm -ldl -lpthread -o busyq
 #
 # Uses an ar MRI script to merge all archives + object files into one.
 # =====================================================================
@@ -194,17 +193,17 @@ add_custom_command(
 add_custom_target(busyq-lib DEPENDS "${BUSYQ_LIB}")
 
 # =====================================================================
-# Applet table — full or filtered via preprocessor
+# Feature gates + applet table — the lightweight recompile target
 #
-# src/applets.c includes src/applets.h (X-macro registry).  Filtering
-# is done at compile time: -DBUSYQ_CUSTOM_APPLETS plus individual
-# -DAPPLET_<name>=1 flags select which applets to include.  No code
-# generation step is needed.
+# src/features.c is the only file recompiled during custom builds.
+# It controls applet selection (APPLET_<name> macros from applets.h)
+# and feature flags (BUSYQ_OVERLAY, etc.).  LTO prunes unreferenced
+# code from the pre-built libbusyq.a based on what features.c enables.
 #
 # When BUSYQ_APPLETS is set (semicolon-separated list), CMake converts
 # it to the appropriate compile definitions.
 # =====================================================================
-add_executable(busyq src/applets.c)
+add_executable(busyq src/features.c)
 
 target_include_directories(busyq PRIVATE
     src
@@ -214,6 +213,10 @@ target_include_directories(busyq PRIVATE
 
 if(BUSYQ_SSL)
     target_compile_definitions(busyq PRIVATE BUSYQ_SSL)
+endif()
+
+if(BUSYQ_OVERLAY)
+    target_compile_definitions(busyq PRIVATE BUSYQ_OVERLAY)
 endif()
 
 if(BUSYQ_APPLETS)
@@ -291,5 +294,5 @@ endif()
 
 # Install the library and headers for custom builds
 install(FILES "${BUSYQ_LIB}" DESTINATION lib OPTIONAL)
-install(FILES src/applet_table.h src/applets.h DESTINATION include/busyq)
-install(FILES src/applets.c DESTINATION share/busyq)
+install(FILES src/applet_table.h src/applets.h src/overlay.h DESTINATION include/busyq)
+install(FILES src/features.c DESTINATION share/busyq)

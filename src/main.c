@@ -5,21 +5,15 @@
  * /proc/self/exe with argv[0] set to an applet name (e.g. curl needing
  * ssl_client), we dispatch to the applet instead of starting bash.
  *
- * If BUSYQ_OVERLAY is enabled and a script is appended after the ELF
- * binary (overlay data), the script is loaded and executed with all
- * command-line arguments forwarded to it.
- *
- * Bash's own argv[0] semantics are preserved: "sh" enters POSIX mode,
- * "bash" / "busyq" / anything unrecognised falls through to bash.
+ * If overlay support is enabled (via BUSYQ_OVERLAY at features.c
+ * compile time) and a script is appended after the ELF binary, the
+ * script is loaded and executed with all command-line arguments
+ * forwarded to it.
  */
 
 #include "applet_table.h"
-#include <string.h>
-
-#ifdef BUSYQ_OVERLAY
-#include "overlay.h"
 #include <stdlib.h>
-#endif
+#include <string.h>
 
 /* Declared in bash's shell.h, but we just need the prototype */
 extern int bash_main(int argc, char **argv);
@@ -48,18 +42,22 @@ int main(int argc, char **argv)
             return applet->main_func(argc, argv);
     }
 
-#ifdef BUSYQ_OVERLAY
     /*
      * Check for an embedded script overlay.  If present, run it via
      * bash -c with the original argv[0] as $0 and remaining args as
      * positional parameters.
+     *
+     * busyq_check_overlay() is a thunk defined in features.c that
+     * calls the real overlay loader when BUSYQ_OVERLAY is defined,
+     * or returns NULL (no-op) otherwise.  In the no-op case LTO
+     * prunes all overlay-related code (ELF parsing, zlib, etc.).
      *
      * This runs after applet dispatch so that internal re-exec (e.g.
      * ssl_client) still works even when an overlay is attached.
      */
     {
         size_t script_len;
-        char *script = busyq_load_overlay(&script_len);
+        char *script = busyq_check_overlay(&script_len);
 
         if (script) {
             /*
@@ -93,7 +91,6 @@ int main(int argc, char **argv)
             return ret;
         }
     }
-#endif
 
     return bash_main(argc, argv);
 }

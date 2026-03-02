@@ -88,7 +88,7 @@ RUN strip --strip-all build/ssl/busyq \
 # ---- Copy dev files for custom builds ----
 RUN cp src/applet_table.h out/busyq-dev/ \
     && cp src/applets.h out/busyq-dev/ \
-    && cp src/applets.c out/busyq-dev/ \
+    && cp src/features.c out/busyq-dev/ \
     && if [ -f out/busyq-scan ]; then \
         cp out/busyq-scan out/busyq-dev/; \
     fi

@@ -36,11 +36,13 @@ file(COPY
 )
 file(RENAME "${SOURCE_PATH}/applet_table.h" "${SOURCE_PATH}/busyq_applet_table.h")
 
-# Provide a stub for busyq_find_applet so bash can link during its build.
-# The real implementation comes from applets.c at final link time.
+# Provide stubs for busyq_find_applet and busyq_check_overlay so bash
+# can link during its build.  The real implementations come from
+# features.c at final link time.
 file(WRITE "${SOURCE_PATH}/busyq_stub.c" [=[
 #include "busyq_applet_table.h"
 const struct busyq_applet *busyq_find_applet(const char *name) { (void)name; return 0; }
+char *busyq_check_overlay(size_t *out_len) { (void)out_len; return 0; }
 ]=])
 
 # Bash uses autotools.

@@ -32,7 +32,7 @@ prefixed libc names back to real ones, or use a linker script. The vcpkg
 portfile will generate the redefine-syms map automatically.
 
 ### Applet dispatch (replacing busybox)
-Applet registry in `src/applets.h` (X-macro) with dispatch in `src/applets.c`.
+Applet registry in `src/applets.h` (X-macro) with dispatch in `src/features.c`.
 Custom builds use `-DBUSYQ_CUSTOM_APPLETS -DAPPLET_<name>=1` to select
 applets at compile time; LTO strips unreferenced entry functions.
 The bash findcmd.c patches are already generic and need no changes.
@@ -52,7 +52,7 @@ sets argv[0] before calling.
 - [ ] Remove `ports/busyq-busybox/` vcpkg port
 - [ ] Remove `src/bb_namespace.h`
 - [ ] Remove `config/busybox.config`
-- [x] Refactor applet dispatch: replaced `src/applet_table.c` with `src/applets.h` (X-macro registry) + `src/applets.c` (preprocessor-filtered dispatch table).
+- [x] Refactor applet dispatch: replaced `src/applet_table.c` with `src/applets.h` (X-macro registry) + `src/features.c` (preprocessor-filtered dispatch table + feature gates).
 - [ ] Update `CMakeLists.txt`: remove libbusybox.a from link step
 - [ ] Update `vcpkg.json` manifest: remove busyq-busybox dependency
 - [ ] Verify: `busyq -c 'echo hello'` works, `busyq -c 'curl --version'` works, `busyq -c 'jq --version'` works
