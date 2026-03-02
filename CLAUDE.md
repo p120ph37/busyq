@@ -9,7 +9,7 @@ Always launches as bash, with all bundled tools available as pseudo-builtins.
 - `src/` - C source for entry point, feature gates, and scanner
 - `src/applets.h` - X-macro applet registry (single source of truth)
 - `src/features.c` - Feature gates + applet dispatch (the lightweight recompile target)
-- `src/applet_table.h` - Shared struct/API for applet lookup + feature thunks
+- `src/features.h` - Shared struct/API for applet lookup + feature thunks
 - `src/overlay.c` - Embedded script overlay support (ELF parsing, UPX, gzip)
 - `src/overlay.h` - Overlay API (busyq_load_overlay)
 - `src/busyq_scan_main.c` - Scanner binary entry point + classifier

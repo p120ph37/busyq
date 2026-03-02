@@ -27,7 +27,7 @@
  *      -Isrc/ src/features.c ...
  */
 
-#include "applet_table.h"
+#include "features.h"
 #include <string.h>
 #include <unistd.h>
 

@@ -300,5 +300,5 @@ endif()
 
 # Install the library and headers for custom builds
 install(FILES "${BUSYQ_LIB}" DESTINATION lib OPTIONAL)
-install(FILES src/applet_table.h src/applets.h src/overlay.h DESTINATION include/busyq)
+install(FILES src/features.h src/applets.h src/overlay.h DESTINATION include/busyq)
 install(FILES src/features.c DESTINATION share/busyq)
