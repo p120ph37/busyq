@@ -4,14 +4,20 @@
 # Each tool's main() is renamed to <tool>_main via post-build recompilation.
 # Symbol prefixing prevents collisions with bash/coreutils gnulib symbols.
 #
-# Tools included (40): cal, chrt, col, colcrt, colrm, column, fallocate,
-# flock, getopt, hardlink, hexdump, ionice, ipcmk, ipcrm, ipcs, logger,
-# look, lscpu, lsns, mcookie, mesg, more, mountpoint, namei, nologin,
-# nsenter, prlimit, rename, renice, rev, script, scriptlive, scriptreplay,
-# setsid, taskset, ul, unshare, uuidgen, uuidparse, whereis
+# Tools included (54): cal, choom, chrt, col, colcrt, colrm, column, exch,
+# fadvise, fallocate, fincore, findmnt, flock, getopt, hardlink, hexdump,
+# ionice, ipcmk, ipcrm, ipcs, logger, look, lsclocks, lscpu, lsfd, lsipc,
+# lslocks, lsns, mcookie, mesg, more, mountpoint, namei, nologin, nsenter,
+# pipesz, prlimit, rename, renice, rev, script, scriptlive, scriptreplay,
+# setarch, setpgid, setsid, taskset, uclampset, ul, unshare, uuidgen,
+# uuidparse, waitpid, whereis
 #
 # Not included: disk/partition tools (fdisk, mount, etc.), login/PAM tools
 # (login, su, etc.), utmp-dependent tools (last, wall, write).
+#
+# Requires additional vcpkg ports to enable:
+#   su       — needs linux-pam (PAM headers required by configure)
+#   setpriv  — needs libcap-ng (required by configure)
 
 include("${CMAKE_CURRENT_LIST_DIR}/../../scripts/cmake/busyq_alpine_helpers.cmake")
 include("${CMAKE_CURRENT_LIST_DIR}/../../scripts/cmake/busyq_symbol_helpers.cmake")
@@ -38,7 +44,7 @@ set(ENV{FORCE_UNSAFE_CONFIGURE} "1")
 
 # Configure: let util-linux build everything it can.  We disable
 # subsystems we don't want (disk, PAM, etc.) and selectively collect
-# only the object files for our 40 target tools after the build.
+# only the object files for our 54 target tools after the build.
 # Many tools have no individual --enable flag (only --disable), so
 # the "build everything, pick what we need" approach is required.
 vcpkg_configure_make(
@@ -64,7 +70,6 @@ vcpkg_configure_make(
         --disable-libfdisk
         --disable-zramctl
         --disable-wipefs
-        --disable-findmnt
         --disable-findfs
         # Disable login/PAM tools
         --disable-login
@@ -125,12 +130,17 @@ vcpkg_build_make(OPTIONS "CPPFLAGS=-include ${_prefix_h}")
 # Each entry: tool_name|path/to/main_source.c (relative to SOURCE_PATH)
 set(UL_TOOL_SOURCES
     "cal|misc-utils/cal.c"
+    "choom|sys-utils/choom.c"
     "chrt|schedutils/chrt.c"
     "col|text-utils/col.c"
     "colcrt|text-utils/colcrt.c"
     "colrm|text-utils/colrm.c"
     "column|text-utils/column.c"
+    "exch|misc-utils/exch.c"
+    "fadvise|misc-utils/fadvise.c"
     "fallocate|sys-utils/fallocate.c"
+    "fincore|misc-utils/fincore.c"
+    "findmnt|misc-utils/findmnt.c"
     "flock|sys-utils/flock.c"
     "getopt|misc-utils/getopt.c"
     "hardlink|misc-utils/hardlink.c"
@@ -141,7 +151,11 @@ set(UL_TOOL_SOURCES
     "ipcs|sys-utils/ipcs.c"
     "logger|misc-utils/logger.c"
     "look|misc-utils/look.c"
+    "lsclocks|misc-utils/lsclocks.c"
     "lscpu|sys-utils/lscpu.c"
+    "lsfd|misc-utils/lsfd.c"
+    "lsipc|sys-utils/lsipc.c"
+    "lslocks|misc-utils/lslocks.c"
     "lsns|sys-utils/lsns.c"
     "mcookie|misc-utils/mcookie.c"
     "mesg|term-utils/mesg.c"
@@ -150,6 +164,7 @@ set(UL_TOOL_SOURCES
     "namei|misc-utils/namei.c"
     "nologin|login-utils/nologin.c"
     "nsenter|sys-utils/nsenter.c"
+    "pipesz|misc-utils/pipesz.c"
     "prlimit|sys-utils/prlimit.c"
     "rename|misc-utils/rename.c"
     "renice|sys-utils/renice.c"
@@ -157,12 +172,16 @@ set(UL_TOOL_SOURCES
     "script|term-utils/script.c"
     "scriptlive|term-utils/scriptlive.c"
     "scriptreplay|term-utils/scriptreplay.c"
+    "setarch|sys-utils/setarch.c"
+    "setpgid|sys-utils/setpgid.c"
     "setsid|sys-utils/setsid.c"
     "taskset|schedutils/taskset.c"
+    "uclampset|schedutils/uclampset.c"
     "ul|text-utils/ul.c"
     "unshare|sys-utils/unshare.c"
     "uuidgen|misc-utils/uuidgen.c"
     "uuidparse|misc-utils/uuidparse.c"
+    "waitpid|misc-utils/waitpid.c"
     "whereis|misc-utils/whereis.c"
 )
 
