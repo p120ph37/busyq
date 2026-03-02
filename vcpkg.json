@@ -41,7 +41,8 @@
     "busyq-whois",
     "busyq-procps",
     "busyq-psmisc",
-    "busyq-lsof"
+    "busyq-lsof",
+    "busyq-util-linux"
   ],
   "features": {
     "ssl": {
