@@ -124,7 +124,7 @@ set -eu
 SRCDIR=\"${SOURCE_PATH}/src\"
 CC=\"${CURLMAIN_CC}\"
 TOOLCHAIN_CFLAGS=\"${CURLMAIN_CFLAGS}\"
-BASE_CFLAGS=\"-DHAVE_CONFIG_H -DCURL_STATICLIB\"
+BASE_CFLAGS=\"-D_GNU_SOURCE -DHAVE_CONFIG_H -DCURL_STATICLIB\"
 INCS=\"-include ${CURLMAIN_BUILD_DIR}/curl_config.h -I${SOURCE_PATH}/include -I${SOURCE_PATH}/lib -I${SOURCE_PATH}/src -I${CURLMAIN_BUILD_DIR} -I${CURRENT_INSTALLED_DIR}/include\"
 for f in \"\$SRCDIR\"/*.c \"\$SRCDIR\"/toolx/*.c; do
     [ -f \"\$f\" ] || continue
