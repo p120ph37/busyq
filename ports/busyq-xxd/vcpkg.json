@@ -1,0 +1,12 @@
+{
+  "name": "busyq-xxd",
+  "version-string": "9.1.1105",
+  "description": "xxd hex dump tool (from vim) built as a static library for busyq",
+  "license": "Vim",
+  "dependencies": [
+    {
+      "name": "vcpkg-cmake-get-vars",
+      "host": true
+    }
+  ]
+}

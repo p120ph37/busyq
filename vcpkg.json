@@ -42,7 +42,8 @@
     "busyq-procps",
     "busyq-psmisc",
     "busyq-lsof",
-    "busyq-util-linux"
+    "busyq-util-linux",
+    "busyq-xxd"
   ],
   "features": {
     "ssl": {

@@ -36,61 +36,68 @@ busyq_gen_prefix_header(ul "${_prefix_h}")
 
 set(ENV{FORCE_UNSAFE_CONFIGURE} "1")
 
-# Configure with only the tools we want.  --disable-all-programs starts
-# from a clean slate; each --enable-<tool> adds back one command.
+# Configure: let util-linux build everything it can.  We disable
+# subsystems we don't want (disk, PAM, etc.) and selectively collect
+# only the object files for our 40 target tools after the build.
+# Many tools have no individual --enable flag (only --disable), so
+# the "build everything, pick what we need" approach is required.
 vcpkg_configure_make(
     SOURCE_PATH "${SOURCE_PATH}"
     OPTIONS
-        --disable-all-programs
-        # Internal libraries needed by our tools
+        # Internal libraries we need
         --enable-libuuid
         --enable-libsmartcols
-        # misc-utils
-        --enable-cal
-        --enable-flock
-        --enable-getopt
-        --enable-hardlink
-        --enable-logger
-        --enable-look
-        --enable-lscpu
-        --enable-mcookie
-        --enable-namei
-        --enable-rename
-        --enable-uuidgen
-        --enable-uuidparse
-        --enable-whereis
-        # sys-utils
-        --enable-chrt
-        --enable-fallocate
-        --enable-ionice
-        --enable-ipcmk
-        --enable-ipcrm
-        --enable-ipcs
-        --enable-lsns
-        --enable-mountpoint
-        --enable-nsenter
-        --enable-prlimit
-        --enable-renice
-        --enable-setsid
-        --enable-taskset
-        --enable-unshare
-        # text-utils
-        --enable-col
-        --enable-colcrt
-        --enable-colrm
-        --enable-column
-        --enable-hexdump
-        --enable-more
-        --enable-rev
-        --enable-ul
-        # term-utils
-        --enable-mesg
-        --enable-script
-        --enable-scriptlive
-        --enable-scriptreplay
-        # login-utils (just nologin — no PAM/utmp needed)
-        --enable-nologin
-        # Disable all optional dependencies we don't need
+        --enable-libmount
+        --enable-libblkid
+        # Disable disk/partition tools (not their libraries)
+        --disable-fdisk
+        --disable-sfdisk
+        --disable-cfdisk
+        --disable-mount
+        --disable-losetup
+        --disable-fsck
+        --disable-partx
+        --disable-mkswap
+        --disable-swapon
+        --disable-lsblk
+        --disable-blkid
+        --disable-libfdisk
+        --disable-zramctl
+        --disable-wipefs
+        --disable-findmnt
+        --disable-findfs
+        # Disable login/PAM tools
+        --disable-login
+        --disable-sulogin
+        --disable-su
+        --disable-runuser
+        --disable-chfn-chsh
+        # Disable other tools we don't need
+        --disable-wall
+        --disable-write
+        --disable-last
+        --disable-utmpdump
+        --disable-agetty
+        --disable-hwclock
+        --disable-rfkill
+        --disable-dmesg
+        --disable-kill
+        --disable-setterm
+        --disable-wdctl
+        --disable-raw
+        --disable-cramfs
+        --disable-eject
+        --disable-fdformat
+        --disable-tunelp
+        --disable-line
+        --disable-vipw
+        --disable-newgrp
+        --disable-pg
+        --disable-pivot-root
+        --disable-switch-root
+        --disable-liblastlog2
+        --disable-pam-lastlog2
+        # Disable all optional dependencies
         --disable-nls
         --disable-tls
         --disable-makeinstall-setuid
@@ -109,6 +116,7 @@ vcpkg_configure_make(
         --without-user
         --without-utempter
         --without-ncursesw
+        --without-cryptsetup
 )
 
 vcpkg_build_make(OPTIONS "CPPFLAGS=-include ${_prefix_h}")
@@ -117,17 +125,17 @@ vcpkg_build_make(OPTIONS "CPPFLAGS=-include ${_prefix_h}")
 # Each entry: tool_name|path/to/main_source.c (relative to SOURCE_PATH)
 set(UL_TOOL_SOURCES
     "cal|misc-utils/cal.c"
-    "chrt|sys-utils/chrt.c"
+    "chrt|schedutils/chrt.c"
     "col|text-utils/col.c"
     "colcrt|text-utils/colcrt.c"
     "colrm|text-utils/colrm.c"
     "column|text-utils/column.c"
     "fallocate|sys-utils/fallocate.c"
-    "flock|misc-utils/flock.c"
+    "flock|sys-utils/flock.c"
     "getopt|misc-utils/getopt.c"
     "hardlink|misc-utils/hardlink.c"
     "hexdump|text-utils/hexdump.c"
-    "ionice|sys-utils/ionice.c"
+    "ionice|schedutils/ionice.c"
     "ipcmk|sys-utils/ipcmk.c"
     "ipcrm|sys-utils/ipcrm.c"
     "ipcs|sys-utils/ipcs.c"
@@ -150,7 +158,7 @@ set(UL_TOOL_SOURCES
     "scriptlive|term-utils/scriptlive.c"
     "scriptreplay|term-utils/scriptreplay.c"
     "setsid|sys-utils/setsid.c"
-    "taskset|sys-utils/taskset.c"
+    "taskset|schedutils/taskset.c"
     "ul|text-utils/ul.c"
     "unshare|sys-utils/unshare.c"
     "uuidgen|misc-utils/uuidgen.c"
@@ -171,9 +179,12 @@ set(UL_BUILD_REL "${CURRENT_BUILDTREES_DIR}/${TARGET_TRIPLET}-rel")
 file(GLOB_RECURSE UL_OBJS
     "${UL_BUILD_REL}/lib/*.o"
     "${UL_BUILD_REL}/libuuid/src/*.o"
+    "${UL_BUILD_REL}/libblkid/src/*.o"
     "${UL_BUILD_REL}/libsmartcols/src/*.o"
+    "${UL_BUILD_REL}/libmount/src/*.o"
     "${UL_BUILD_REL}/misc-utils/*.o"
     "${UL_BUILD_REL}/sys-utils/*.o"
+    "${UL_BUILD_REL}/schedutils/*.o"
     "${UL_BUILD_REL}/text-utils/*.o"
     "${UL_BUILD_REL}/term-utils/*.o"
     "${UL_BUILD_REL}/login-utils/*.o"
