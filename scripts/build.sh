@@ -218,9 +218,9 @@ clang $LTO_CFLAGS -I"$PROJECT_DIR/src" \
 
 # Determine output binary name
 if [ "$SSL_MODE" = "mbedtls" ]; then
-    OUT_BIN="$OUT_DIR/busyq-ssl"
-else
     OUT_BIN="$OUT_DIR/busyq"
+else
+    OUT_BIN="$OUT_DIR/busyq-nossl"
 fi
 
 # Link everything together

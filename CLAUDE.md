@@ -27,8 +27,8 @@ Always launches as bash, with all bundled tools available as pseudo-builtins.
 docker buildx build --output=out .
 ```
 Produces:
-- `out/busyq` and `out/busyq-ssl` — full binaries
-- `out/libbusyq.a` and `out/libbusyq-ssl.a` — LTO library artifacts
+- `out/busyq` and `out/busyq-nossl` — full binaries (SSL and no-SSL variants)
+- `out/libbusyq.a` and `out/libbusyq-nossl.a` — LTO library artifacts
 - `out/busyq-dev/` — headers and scripts for custom builds
 
 ### Custom builds (minimal binary for a specific script)

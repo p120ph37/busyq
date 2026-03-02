@@ -1,13 +1,13 @@
 # Dockerfile - Multi-stage build for busyq
 #
 # Builds two variants of the busyq binary (bash+curl+jq+coreutils+tools):
-#   1. busyq      - No SSL (smaller)
-#   2. busyq-ssl  - With mbedtls + embedded Mozilla CA bundle
+#   1. busyq        - With mbedtls + embedded Mozilla CA bundle (default)
+#   2. busyq-nossl  - No SSL (smaller)
 #
 # Also produces LTO library artifacts for custom builds:
-#   3. libbusyq.a     - No-SSL merged library (LTO bitcode)
-#   4. libbusyq-ssl.a - SSL merged library (LTO bitcode)
-#   5. busyq-dev/     - Headers + scripts for custom builds
+#   3. libbusyq.a       - SSL merged library (LTO bitcode)
+#   4. libbusyq-nossl.a - No-SSL merged library (LTO bitcode)
+#   5. busyq-dev/       - Headers + scripts for custom builds
 #
 # Usage:
 #   docker buildx build --output=out .
@@ -62,9 +62,9 @@ RUN cmake --preset no-ssl && cmake --build --preset no-ssl
 RUN strip --strip-all build/no-ssl/busyq \
     && mkdir -p out/busyq-dev \
     && cp build/no-ssl/busyq out/busyq-nopack \
-    && cp build/no-ssl/busyq out/busyq \
-    && cp build/no-ssl/libbusyq.a out/libbusyq.a \
-    && (upx --best --lzma out/busyq || true) \
+    && cp build/no-ssl/busyq out/busyq-nossl \
+    && cp build/no-ssl/libbusyq.a out/libbusyq-nossl.a \
+    && (upx --best --lzma out/busyq-nossl || true) \
     && if [ -f build/no-ssl/busyq-scan ]; then \
         strip --strip-all build/no-ssl/busyq-scan \
         && cp build/no-ssl/busyq-scan out/busyq-scan \
@@ -81,9 +81,9 @@ RUN cmake --preset ssl && cmake --build --preset ssl
 
 # Strip and compress binary; also copy library artifact
 RUN strip --strip-all build/ssl/busyq \
-    && cp build/ssl/busyq out/busyq-ssl \
-    && cp build/ssl/libbusyq.a out/libbusyq-ssl.a \
-    && (upx --best --lzma out/busyq-ssl || true)
+    && cp build/ssl/busyq out/busyq \
+    && cp build/ssl/libbusyq.a out/libbusyq.a \
+    && (upx --best --lzma out/busyq || true)
 
 # ---- Copy dev files for custom builds ----
 RUN cp src/features.h out/busyq-dev/ \
@@ -99,7 +99,7 @@ RUN cp src/features.h out/busyq-dev/ \
 FROM alpine:latest AS test
 COPY --from=build /src/out/busyq /busyq
 COPY --from=build /src/out/busyq-nopack /busyq-nopack
-COPY --from=build /src/out/busyq-ssl /busyq-ssl
+COPY --from=build /src/out/busyq-nossl /busyq-nossl
 # Core (Phase 0-1)
 RUN /busyq -c 'echo "bash: ok"' \
     && /busyq -c 'ls /' > /dev/null \
@@ -107,7 +107,7 @@ RUN /busyq -c 'echo "bash: ok"' \
     && /busyq -c 'date +%s' > /dev/null \
     && /busyq -c 'jq -n "{test: true}"' \
     && /busyq -c 'curl --version' > /dev/null \
-    && /busyq-ssl -c 'curl --version' | grep -qi tls \
+    && /busyq -c 'curl --version' | grep -qi tls \
     && echo "Core tests passed"
 # Phase 2: Text processing
 RUN /busyq -c 'echo hello | awk "{print \$1}"' \
@@ -158,10 +158,10 @@ RUN set -e \
     && cat /busyq-nopack /tmp/test.sh.gz > /tmp/t2 && chmod +x /tmp/t2 \
     && /tmp/t2 hello world | grep -q 'BUSYQ_OVERLAY:/tmp/t2:args=2:hello:world' \
     && echo "overlay 2/4 passed: stripped + gzip" \
-    && cat /busyq /tmp/test.sh > /tmp/t3 && chmod +x /tmp/t3 \
+    && cat /busyq-nossl /tmp/test.sh > /tmp/t3 && chmod +x /tmp/t3 \
     && /tmp/t3 hello world | grep -q 'BUSYQ_OVERLAY:/tmp/t3:args=2:hello:world' \
     && echo "overlay 3/4 passed: upx + raw" \
-    && cat /busyq /tmp/test.sh.gz > /tmp/t4 && chmod +x /tmp/t4 \
+    && cat /busyq-nossl /tmp/test.sh.gz > /tmp/t4 && chmod +x /tmp/t4 \
     && /tmp/t4 hello world | grep -q 'BUSYQ_OVERLAY:/tmp/t4:args=2:hello:world' \
     && echo "overlay 4/4 passed: upx + gzip" \
     && echo "All overlay tests passed"
@@ -171,8 +171,8 @@ RUN set -e \
 # ============================================================
 FROM scratch AS output
 COPY --from=build /src/out/busyq /busyq
-COPY --from=build /src/out/busyq-ssl /busyq-ssl
+COPY --from=build /src/out/busyq-nossl /busyq-nossl
 COPY --from=build /src/out/busyq-scan* /
 COPY --from=build /src/out/libbusyq.a /libbusyq.a
-COPY --from=build /src/out/libbusyq-ssl.a /libbusyq-ssl.a
+COPY --from=build /src/out/libbusyq-nossl.a /libbusyq-nossl.a
 COPY --from=build /src/out/busyq-dev/ /busyq-dev/
