@@ -55,18 +55,18 @@ RUN apk add --no-cache \
 # ---- Phase 1: Pre-install vcpkg packages (cached until ports/manifest change) ----
 # Copy build system + package manifest files.  Overlay ports reference
 # scripts/cmake/ helpers and a few source files (features.h is needed by
-# the bash port, busyq_scan_walk.c is compiled inside the bash build tree).
+# the bash port; busyq_scan_walk.c + busyq_scan.h are compiled during bash build).
 COPY vcpkg.json vcpkg-configuration.json CMakePresets.json CMakeLists.txt /src/
 COPY ports/ /src/ports/
 COPY scripts/cmake/ /src/scripts/cmake/
-COPY src/features.h src/busyq_scan_walk.c /src/src/
+COPY src/features.h src/busyq_scan_walk.c src/busyq_scan.h /src/src/
 WORKDIR /src
 
 # Create source stubs for files cmake needs to see at configure time
 # but that are NOT needed by vcpkg port builds.
 RUN touch src/main.c src/features.c src/overlay.c \
           src/busyq_scan_main.c src/ssl_client_mbedtls.c \
-          src/applets.h src/overlay.h src/busyq_scan.h
+          src/applets.h src/overlay.h
 
 # Configure no-ssl preset: triggers vcpkg to install all base packages.
 # This layer is cached as long as the files above haven't changed,
