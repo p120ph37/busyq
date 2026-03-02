@@ -1,0 +1,48 @@
+Remove libbsd dependency for musl/busyq static builds.
+
+musl provides strtonum, strlcpy, strlcat, explicit_bzero natively.
+readpassphrase is provided as a standalone compat file in the port.
+resolv functions are built into musl (no -lresolv needed).
+
+diff --git a/Makefile b/Makefile
+index 93ca5ee..busyq 100644
+--- a/Makefile
++++ b/Makefile
+@@ -5,9 +5,8 @@ SRCS=	netcat.c atomicio.c socks.c
+ LDADD+= -ltls -lssl -lcrypto
+ DPADD+=  ${LIBTLS} ${LIBSSL} ${LIBCRYPTO}
+
+-PKG_CONFIG ?= pkg-config
+-LIBS=  `$(PKG_CONFIG) --libs libbsd` -lresolv
+-OBJS=  $(SRCS:.c=.o)
++LIBS=
++OBJS=	$(SRCS:.c=.o)
+ CFLAGS=  -g -O2
+ LDFLAGS=  -Wl,--no-add-needed
+
+diff --git a/netcat.c b/netcat.c
+index 161ade1..busyq 100644
+--- a/netcat.c
++++ b/netcat.c
+@@ -101,8 +101,6 @@
+ #include <time.h>
+ #include <tls.h>
+ #include <unistd.h>
+-#include <bsd/stdlib.h>
+-#include <bsd/string.h>
+
+ #include "atomicio.h"
+
+diff --git a/socks.c b/socks.c
+index 8db10d4..busyq 100644
+--- a/socks.c
++++ b/socks.c
+@@ -38,7 +38,7 @@
+ #include <string.h>
+ #include <unistd.h>
+ #include <resolv.h>
+-#include <bsd/readpassphrase.h>
++#include "readpassphrase.h"
+ #include "atomicio.h"
+
+ #define SOCKS_PORT	"1080"

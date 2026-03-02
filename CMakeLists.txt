@@ -96,6 +96,9 @@ _busyq_find(LIB_PING       ping)
 _busyq_find(LIB_HOSTNAME   hostname)
 _busyq_find(LIB_WHOIS      whois)
 
+# util-linux (Phase 7)
+_busyq_find(LIB_UTILLINUX  utillinux)
+
 # Process utilities
 _busyq_find(LIB_PROCPS     procps)
 _busyq_find(LIB_PSMISC     psmisc)
