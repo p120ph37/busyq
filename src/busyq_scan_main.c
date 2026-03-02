@@ -11,6 +11,8 @@
  * instead of executing commands.
  */
 
+#define _GNU_SOURCE  /* dprintf, fdopen, strdup */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
