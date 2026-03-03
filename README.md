@@ -175,7 +175,8 @@ Publishable images: `latest` (SSL), `nossl`, `custom` (Alpine-based build enviro
 
 ## License
 
-The combined binary is licensed under **GPL-3.0-or-later**.
+The combined binary is licensed under **GPL-3.0-or-later**. The busyq
+integration code (entry point, applet dispatch, overlay loader) is MIT-licensed.
 
 The bundled components use a mix of licenses (GPL-3.0+, GPL-2.0+, MIT, BSD,
 Zlib, Apache-2.0, etc.). Since all GPL-licensed components use the "or later"
