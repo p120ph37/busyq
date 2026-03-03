@@ -55,7 +55,12 @@ Each component is a vcpkg overlay port in `ports/`:
 - `ports/busyq-curl/` - Builds curl 8.18.0 (with optional SSL feature)
 - `ports/busyq-jq/` - Builds jq 1.8.1 as static library
 
-Additional upstream tools will be added as vcpkg overlay ports (see PLAN.md).
+Additional upstream tools are added as vcpkg overlay ports (see PLAN.md):
+- `ports/busyq-dns-tools/` - Standalone nslookup/dig DNS lookup tools
+- `ports/busyq-iproute2/` - Builds iproute2 ip command (based on Alpine iproute2-minimal)
+- `ports/libmnl/` - Minimalistic Netlink library (iproute2 dependency)
+- (and many more — see `ports/` directory for full list)
+
 vcpkg handles dependency resolution, source downloading, patch application,
 and build orchestration. The top-level CMakeLists.txt links everything together.
 

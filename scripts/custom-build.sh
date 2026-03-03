@@ -55,10 +55,10 @@ strings,sync,tac,tail,tar,tee,test,timeout,touch,tr,true,truncate,tty,\
 uname,uniq,unzip,uptime,watch,wc,wget,which,whoami,xargs,xz,yes"
 
 # --net: networking tools
-PRESET_NET="curl,hostname,nc,ping,wget,whois"
+PRESET_NET="curl,dig,hostname,ip,nc,nslookup,ping,wget,whois"
 
 # --text: text processing and search
-PRESET_TEXT="diff,ed,find,gawk,grep,less,patch,sed,xargs"
+PRESET_TEXT="diff,ed,find,gawk,grep,patch,sed,xargs"
 
 # --archive: archival and compression
 PRESET_ARCHIVE="bzip2,cpio,gzip,lzop,tar,unzip,xz,zip"

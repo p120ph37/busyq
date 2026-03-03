@@ -139,6 +139,9 @@ RUN /busyq -c 'echo "1+1" | bc' \
     && echo "Phase 4 tests passed"
 # Phase 5: Networking
 RUN /busyq -c 'hostname' > /dev/null \
+    && /busyq -c 'nslookup --help' > /dev/null \
+    && /busyq -c 'dig -h' > /dev/null \
+    && /busyq -c 'ip link show lo' > /dev/null \
     && echo "Phase 5 tests passed"
 # Phase 6: Process utilities
 RUN /busyq -c 'ps aux' > /dev/null \

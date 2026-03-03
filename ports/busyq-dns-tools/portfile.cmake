@@ -1,0 +1,71 @@
+# busyq-dns-tools: minimal standalone nslookup and dig implementations
+# No external source download needed -- source is shipped in the port directory.
+# No symbol isolation needed -- no gnulib, no symbol collisions.
+#
+# Both tools use res_query() from libc for DNS lookups.  On musl (Alpine),
+# the resolver is part of libc itself (no -lresolv needed).
+#
+# Commands provided:
+#   nslookup - non-interactive DNS lookup (similar to ISC/busybox nslookup)
+#   dig      - detailed DNS query tool (similar to ISC dig)
+
+include("${CMAKE_CURRENT_LIST_DIR}/../../scripts/cmake/busyq_symbol_helpers.cmake")
+
+vcpkg_cmake_get_vars(cmake_vars_file)
+include("${cmake_vars_file}")
+
+# Only build release (debug artifacts are unused)
+set(VCPKG_BUILD_TYPE release)
+
+set(DNS_CC "${VCPKG_DETECTED_CMAKE_C_COMPILER}")
+set(DNS_CFLAGS "${VCPKG_DETECTED_CMAKE_C_FLAGS} ${VCPKG_DETECTED_CMAKE_C_FLAGS_RELEASE}")
+
+file(MAKE_DIRECTORY "${CURRENT_PACKAGES_DIR}/lib")
+
+set(DNS_BUILD_DIR "${CURRENT_BUILDTREES_DIR}/${TARGET_TRIPLET}-rel")
+file(MAKE_DIRECTORY "${DNS_BUILD_DIR}")
+
+# Compile nslookup.c and dig.c with renamed entry points.
+# No symbol isolation needed since these are standalone implementations
+# with no gnulib or other colliding symbols.
+vcpkg_execute_required_process(
+    COMMAND sh -c "
+        set -e
+        '${DNS_CC}' ${DNS_CFLAGS} -Dmain=nslookup_main \
+            -c '${CURRENT_PORT_DIR}/nslookup.c' \
+            -o nslookup.o
+        '${DNS_CC}' ${DNS_CFLAGS} -Dmain=dig_main \
+            -c '${CURRENT_PORT_DIR}/dig.c' \
+            -o dig.o
+        ar rcs '${CURRENT_PACKAGES_DIR}/lib/libdnstools.a' nslookup.o dig.o
+    "
+    WORKING_DIRECTORY "${DNS_BUILD_DIR}"
+    LOGNAME "build-dns-tools-${TARGET_TRIPLET}"
+)
+
+# Install copyright (MIT license, embedded in source)
+file(WRITE "${CURRENT_PACKAGES_DIR}/share/${PORT}/copyright"
+"MIT License
+
+Copyright (c) 2025 busyq contributors
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the \"Software\"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+")
+
+busyq_finalize_port(COPYRIGHT "${CURRENT_PACKAGES_DIR}/share/${PORT}/copyright")
