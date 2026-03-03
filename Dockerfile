@@ -13,6 +13,13 @@
 #   docker buildx build --output=out .
 #
 # The output directory will contain binaries, libraries, and dev files.
+#
+# Caching strategy:
+#   In CI, BuildKit cache mounts persist the vcpkg binary cache and download
+#   directory across builds via the buildkit-cache-dance GitHub Action.  Even
+#   when Docker layer cache is invalidated by source changes, vcpkg can skip
+#   rebuilding packages whose inputs haven't changed (~45 min savings).
+#   Locally, BuildKit persists cache mounts natively within the builder.
 
 # ============================================================
 # Stage 1: Build environment
@@ -54,9 +61,13 @@ RUN grep '_BQ_IF(APPLET_' src/applets.h | grep 'APPLET(' | \
     || (echo "ERROR: src/applets.h entries are not sorted by command name" && exit 1)
 
 # ---- Build variant 1: no SSL ----
-# CMakePresets.json configures the vcpkg toolchain file, which handles
-# package installation (via vcpkg.json manifest) during cmake configure.
-RUN cmake --preset no-ssl && cmake --build --preset no-ssl
+# Cache mounts: vcpkg binary cache (per-package zip archives keyed by ABI hash)
+# and source downloads.  In CI these are persisted via buildkit-cache-dance;
+# locally, BuildKit keeps them in the builder instance between builds.
+# Cache mount contents are NOT part of the layer -- only the built binaries are.
+RUN --mount=type=cache,target=/root/.cache/vcpkg/archives,id=vcpkg-archives,sharing=locked \
+    --mount=type=cache,target=/opt/vcpkg/downloads,id=vcpkg-downloads,sharing=locked \
+    cmake --preset no-ssl && cmake --build --preset no-ssl
 
 # Strip and compress binaries; also copy library artifact (keep a pre-UPX copy for overlay tests)
 RUN strip --strip-all build/no-ssl/busyq \
@@ -75,7 +86,9 @@ RUN scripts/generate-certs.sh src
 
 # The "ssl" preset sets VCPKG_MANIFEST_FEATURES=ssl, which tells vcpkg
 # to install the ssl feature dependencies (mbedtls, curl[ssl]).
-RUN cmake --preset ssl && cmake --build --preset ssl
+RUN --mount=type=cache,target=/root/.cache/vcpkg/archives,id=vcpkg-archives,sharing=locked \
+    --mount=type=cache,target=/opt/vcpkg/downloads,id=vcpkg-downloads,sharing=locked \
+    cmake --preset ssl && cmake --build --preset ssl
 
 # Strip and compress binary; also copy library artifact
 RUN strip --strip-all build/ssl/busyq \

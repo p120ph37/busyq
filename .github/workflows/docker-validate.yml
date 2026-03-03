@@ -36,6 +36,26 @@ jobs:
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
+        id: buildx
+
+      # Persist vcpkg binary cache + downloads across builds.
+      # On layer cache miss (source changed), vcpkg restores pre-built
+      # packages from the binary cache instead of rebuilding from source.
+      - name: Restore vcpkg cache
+        uses: actions/cache@v4
+        id: vcpkg-cache
+        with:
+          path: vcpkg-cache
+          key: vcpkg-${{ env.PLATFORM_PAIR }}-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json', 'ports/**') }}
+          restore-keys: vcpkg-${{ env.PLATFORM_PAIR }}-
+          save-always: true
+
+      - name: Inject vcpkg cache into BuildKit
+        uses: reproducible-containers/buildkit-cache-dance@v3
+        with:
+          builder: ${{ steps.buildx.outputs.name }}
+          cache-dir: vcpkg-cache
+          skip-extraction: ${{ steps.vcpkg-cache.outputs.cache-hit }}
 
       - name: Run smoke tests
         uses: docker/build-push-action@v6
