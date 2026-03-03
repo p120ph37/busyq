@@ -8,16 +8,16 @@ Always launches as bash, with all bundled tools available as pseudo-builtins —
 
 ```dockerfile
 FROM p120ph37/busyq:latest
-ENTRYPOINT ["/busyq", "-c"]
+ENTRYPOINT ["/bin/busyq", "-c"]
 CMD ["echo hello world"]
 ```
 
 ```sh
 # Run directly
-docker run --rm p120ph37/busyq /busyq -c 'echo "hello" | jq -Rn "[inputs]"'
+docker run --rm p120ph37/busyq /bin/busyq -c 'echo "hello" | jq -Rn "[inputs]"'
 
 # Interactive shell
-docker run --rm -it p120ph37/busyq /busyq
+docker run --rm -it p120ph37/busyq /bin/busyq
 ```
 
 ## Available images
@@ -40,7 +40,7 @@ The binary is fully static — just copy it:
 FROM p120ph37/busyq:latest AS busyq
 
 FROM your-base-image
-COPY --from=busyq /busyq /usr/local/bin/busyq
+COPY --from=busyq /busyq /bin/busyq
 ```
 
 Or in a `FROM scratch` image:
@@ -49,13 +49,28 @@ Or in a `FROM scratch` image:
 FROM p120ph37/busyq:latest AS busyq
 
 FROM scratch
-COPY --from=busyq /busyq /busyq
-ENTRYPOINT ["/busyq"]
+COPY --from=busyq /busyq /bin/busyq
+ENTRYPOINT ["/bin/busyq"]
 ```
 
 ## Use as a script interpreter
 
-busyq supports embedded script overlays — append a bash script after the binary to create a self-contained executable:
+### Shebang scripts
+
+Once installed at `/bin/busyq`, scripts can use it as their interpreter:
+
+```sh
+#!/bin/busyq
+# All bundled tools are available — no PATH or package manager needed
+echo "Today is $(date +%Y-%m-%d)"
+curl -s https://api.example.com/status | jq .health
+ls -la /var/log | awk '{print $NF}'
+```
+
+### Embedded script overlays
+
+Append a bash script after the binary to create a self-contained executable
+with no external dependencies — not even a shell:
 
 ```sh
 # Extract the binary
@@ -105,6 +120,11 @@ chmod +x mybinary
 | `--ssl` | Use the SSL variant (includes mbedtls + CA certificates) |
 | `--applets LIST` | Comma-separated list of additional applets to include |
 | `--no-script` | Skip script scanning (use with `--applets` for manual builds) |
+| `--raw` | Output uncompressed binary (skip UPX compression) |
+
+Script-embedding support (overlay parsing code) is only compiled in when
+`--embed` is used. Without it, LTO strips the overlay code entirely, producing
+a smaller binary.
 
 ## Built-in tools
 
@@ -155,4 +175,16 @@ Publishable images: `latest` (SSL), `nossl`, `custom` (Alpine-based build enviro
 
 ## License
 
-The busyq integration code is MIT-licensed. Bundled components retain their original licenses (GPL-3.0+, MIT, BSD, Apache-2.0 — see individual packages).
+The combined binary is licensed under **GPL-3.0-or-later**.
+
+The bundled components use a mix of licenses (GPL-3.0+, GPL-2.0+, MIT, BSD,
+Zlib, Apache-2.0, etc.). Since all GPL-licensed components use the "or later"
+clause, they can all be exercised under GPLv3, making the combined work
+GPLv3+. Permissive-licensed components (MIT, BSD, Zlib, etc.) are compatible
+with GPLv3.
+
+> **Note:** Projects licensed under GPL-2.0-**only** (without the "or later"
+> clause) — such as busybox and the Linux kernel — cannot be included, because
+> GPLv2-only is incompatible with GPLv3. All GPL-2.0 components in busyq
+> (lzop, procps-ng, psmisc) use GPL-2.0-**or-later**, which permits use under
+> GPLv3.
