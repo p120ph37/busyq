@@ -116,6 +116,19 @@ static int make_ptr_name(const char *ip, char *buf, size_t bufsz)
     return -1;
 }
 
+/* Map h_errno to ISC-style rcode strings.
+ * ISC nslookup prints NXDOMAIN/SERVFAIL/REFUSED, not hstrerror() text. */
+static const char *herrno_to_rcode(void)
+{
+    switch (h_errno) {
+    case HOST_NOT_FOUND: return "NXDOMAIN";
+    case TRY_AGAIN:      return "SERVFAIL";
+    case NO_RECOVERY:    return "REFUSED";
+    case NO_DATA:        return "No answer";
+    default:             return "SERVFAIL";
+    }
+}
+
 /* Read a 16-bit big-endian value from a buffer */
 static unsigned short get16(const unsigned char *p)
 {
@@ -199,23 +212,23 @@ static void print_rdata(const char *qname, int type,
 
     case ns_t_cname:
         if (dn_expand(msg, msg + msglen, rdata, nbuf, sizeof(nbuf)) >= 0)
-            printf("%s\tcanonical name = %s\n", qname, nbuf);
+            printf("%s\tcanonical name = %s.\n", qname, nbuf);
         break;
 
     case ns_t_ns:
         if (dn_expand(msg, msg + msglen, rdata, nbuf, sizeof(nbuf)) >= 0)
-            printf("%s\tnameserver = %s\n", qname, nbuf);
+            printf("%s\tnameserver = %s.\n", qname, nbuf);
         break;
 
     case ns_t_ptr:
         if (dn_expand(msg, msg + msglen, rdata, nbuf, sizeof(nbuf)) >= 0)
-            printf("%s\tname = %s\n", qname, nbuf);
+            printf("%s\tname = %s.\n", qname, nbuf);
         break;
 
     case ns_t_mx: {
         unsigned short pref = get16(rdata);
         if (dn_expand(msg, msg + msglen, rdata + 2, nbuf, sizeof(nbuf)) >= 0)
-            printf("%s\tmail exchanger = %u %s\n", qname, pref, nbuf);
+            printf("%s\tmail exchanger = %u %s.\n", qname, pref, nbuf);
         break;
     }
 
@@ -258,7 +271,7 @@ static void print_rdata(const char *qname, int type,
             unsigned short weight = get16(rdata + 2);
             unsigned short port = get16(rdata + 4);
             if (dn_expand(msg, msg + msglen, rdata + 6, nbuf, sizeof(nbuf)) >= 0)
-                printf("%s\tservice = %u %u %u %s\n",
+                printf("%s\tservice = %u %u %u %s.\n",
                        qname, pri, weight, port, nbuf);
         }
         break;
@@ -379,8 +392,8 @@ int main(int argc, char **argv)
             int anslen = res_query(ptrbuf, ns_c_in, ns_t_ptr,
                                    answer, sizeof(answer));
             if (anslen < 0) {
-                fprintf(stderr, "** server can't find %s: %s\n",
-                        host, hstrerror(h_errno));
+                printf("** server can't find %s: %s\n",
+                       host, herrno_to_rcode());
                 return 1;
             }
             return print_answers(ptrbuf, ns_t_ptr, answer, anslen, 1);
@@ -402,8 +415,8 @@ int main(int argc, char **argv)
         got_aaaa = (anslen_aaaa >= 12);
 
         if (!got_a && !got_aaaa) {
-            fprintf(stderr, "** server can't find %s: %s\n",
-                    host, hstrerror(h_errno));
+            printf("** server can't find %s: %s\n",
+                   host, herrno_to_rcode());
             return 1;
         }
 
@@ -435,14 +448,17 @@ int main(int argc, char **argv)
         int anslen = res_query(host, ns_c_in, qtype,
                                answer, sizeof(answer));
         if (anslen < 0) {
-            fprintf(stderr, "** server can't find %s: %s\n",
-                    host, hstrerror(h_errno));
+            printf("** server can't find %s: %s\n",
+                   host, herrno_to_rcode());
             return 1;
         }
         if (print_answers(host, qtype, answer, anslen, 1) != 0) {
             printf("*** Can't find %s: No answer\n", host);
             return 1;
         }
+        /* ISC nslookup prints this footer for non-A/AAAA queries */
+        if (qtype != ns_t_a && qtype != ns_t_aaaa)
+            printf("\nAuthoritative answers can be found from:\n");
         printf("\n");
         return 0;
     }
