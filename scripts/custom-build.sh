@@ -111,7 +111,7 @@ done
 OUTPUT="$WORK/busyq"
 echo "Compiling with applets: $ALL_APPLETS" >&2
 # shellcheck disable=SC2086
-cc $APPLET_DEFS \
+clang -fuse-ld=lld $APPLET_DEFS \
     -flto -static -Os \
     "$BUSYQ_DEV_DIR/features.c" \
     -I"$BUSYQ_DEV_DIR" \
