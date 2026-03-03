@@ -147,10 +147,11 @@ Over 200 commands from these packages:
 ## Building from source
 
 ```sh
-docker buildx build --output=out .
+docker buildx build --target test .           # build + smoke tests
+docker buildx build --target latest --load .   # load SSL image locally
 ```
 
-Produces `out/busyq` (SSL), `out/busyq-nossl`, plus library artifacts for custom builds.
+Publishable images: `latest` (SSL), `nossl`, `custom` (Alpine-based build environment for custom minimal binaries).
 
 ## License
 

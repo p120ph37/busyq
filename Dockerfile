@@ -10,9 +10,8 @@
 #   5. busyq-dev/       - Headers + scripts for custom builds
 #
 # Usage:
-#   docker buildx build --output=out .
-#
-# The output directory will contain binaries, libraries, and dev files.
+#   docker buildx build --target test .           # build + smoke tests
+#   docker buildx build --target latest --load .   # load SSL image locally
 #
 # Caching strategy:
 #   In CI, BuildKit cache mounts persist the vcpkg binary cache and download
@@ -190,7 +189,7 @@ RUN ["/busyq", "-c", "mkdir -p /bin && ln -sf /busyq /bin/busyq"]
 
 # ---- busyq:custom (Alpine-based build environment) ----
 FROM alpine:3.23 AS custom
-RUN apk add --no-cache clang lld musl-dev upx gzip
+RUN apk add --no-cache clang lld upx gzip
 COPY --from=build /src/out/libbusyq.a /opt/busyq/libbusyq.a
 COPY --from=build /src/out/libbusyq-nossl.a /opt/busyq/libbusyq-nossl.a
 COPY --from=build /src/out/busyq-dev/ /opt/busyq/
@@ -206,14 +205,3 @@ RUN printf '#!/bin/bash\nls /tmp\necho hello | cat\ndate +%%s\n' > /tmp/test.sh 
     && /tmp/test-binary -c 'ls /' > /dev/null \
     && /tmp/test-binary -c 'date +%s' > /dev/null \
     && echo "Custom build smoke test passed"
-
-# ============================================================
-# Stage 4: Extract binaries + libraries (local builds)
-# ============================================================
-FROM scratch AS output
-COPY --from=build /src/out/busyq /busyq
-COPY --from=build /src/out/busyq-nossl /busyq-nossl
-COPY --from=build /src/out/busyq-scan /busyq-scan
-COPY --from=build /src/out/libbusyq.a /libbusyq.a
-COPY --from=build /src/out/libbusyq-nossl.a /libbusyq-nossl.a
-COPY --from=build /src/out/busyq-dev/ /busyq-dev/

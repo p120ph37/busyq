@@ -24,12 +24,10 @@ Always launches as bash, with all bundled tools available as pseudo-builtins.
 
 ## Build
 ```sh
-docker buildx build --output=out .
+docker buildx build --target test .           # build + smoke tests
+docker buildx build --target latest --load .   # load SSL image locally
 ```
-Produces:
-- `out/busyq` and `out/busyq-nossl` — full binaries (SSL and no-SSL variants)
-- `out/libbusyq.a` and `out/libbusyq-nossl.a` — LTO library artifacts
-- `out/busyq-dev/` — headers and scripts for custom builds
+Publishable images: `latest` (SSL), `nossl`, `custom` (Alpine-based build env).
 
 ### Custom builds (minimal binary for a specific script)
 ```sh
