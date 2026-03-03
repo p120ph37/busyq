@@ -13,13 +13,6 @@
 #   docker buildx build --output=out .
 #
 # The output directory will contain binaries, libraries, and dev files.
-#
-# Caching strategy:
-#   When built in CI, vcpkg binary caching (x-gha backend) is enabled via
-#   Docker build secrets.  This lets vcpkg store/retrieve pre-built packages
-#   in the GitHub Actions cache, independent of Docker layer caching.  Even
-#   when the Docker layer cache is invalidated by source changes, vcpkg can
-#   skip rebuilding packages whose inputs haven't changed.
 
 # ============================================================
 # Stage 1: Build environment
@@ -60,25 +53,10 @@ RUN grep '_BQ_IF(APPLET_' src/applets.h | grep 'APPLET(' | \
     && sort -c /tmp/applet_cmds.txt \
     || (echo "ERROR: src/applets.h entries are not sorted by command name" && exit 1)
 
-# Helper: enable vcpkg binary caching when GHA secrets are available.
-# In CI, docker/build-push-action passes ACTIONS_CACHE_URL and
-# ACTIONS_RUNTIME_TOKEN as build secrets.  vcpkg's x-gha backend uses
-# these to store/retrieve pre-built packages in the GitHub Actions cache,
-# so unchanged packages are fetched instead of rebuilt (~15 min savings).
-# When building locally (no secrets), vcpkg builds everything from source.
-# Secrets are NOT baked into layers, so they don't affect cache keys.
-SHELL ["/bin/sh", "-c"]
-
 # ---- Build variant 1: no SSL ----
-RUN --mount=type=secret,id=actions_cache_url \
-    --mount=type=secret,id=actions_runtime_token \
-    VCPKG_BINARY_SOURCES="$( \
-      if [ -f /run/secrets/actions_cache_url ]; then \
-        echo clear\;x-gha,readwrite; \
-      else echo clear; fi)" \
-    ACTIONS_CACHE_URL="$(cat /run/secrets/actions_cache_url 2>/dev/null || true)" \
-    ACTIONS_RUNTIME_TOKEN="$(cat /run/secrets/actions_runtime_token 2>/dev/null || true)" \
-    cmake --preset no-ssl && cmake --build --preset no-ssl
+# CMakePresets.json configures the vcpkg toolchain file, which handles
+# package installation (via vcpkg.json manifest) during cmake configure.
+RUN cmake --preset no-ssl && cmake --build --preset no-ssl
 
 # Strip and compress binaries; also copy library artifact (keep a pre-UPX copy for overlay tests)
 RUN strip --strip-all build/no-ssl/busyq \
@@ -97,15 +75,7 @@ RUN scripts/generate-certs.sh src
 
 # The "ssl" preset sets VCPKG_MANIFEST_FEATURES=ssl, which tells vcpkg
 # to install the ssl feature dependencies (mbedtls, curl[ssl]).
-RUN --mount=type=secret,id=actions_cache_url \
-    --mount=type=secret,id=actions_runtime_token \
-    VCPKG_BINARY_SOURCES="$( \
-      if [ -f /run/secrets/actions_cache_url ]; then \
-        echo clear\;x-gha,readwrite; \
-      else echo clear; fi)" \
-    ACTIONS_CACHE_URL="$(cat /run/secrets/actions_cache_url 2>/dev/null || true)" \
-    ACTIONS_RUNTIME_TOKEN="$(cat /run/secrets/actions_runtime_token 2>/dev/null || true)" \
-    cmake --preset ssl && cmake --build --preset ssl
+RUN cmake --preset ssl && cmake --build --preset ssl
 
 # Strip and compress binary; also copy library artifact
 RUN strip --strip-all build/ssl/busyq \
