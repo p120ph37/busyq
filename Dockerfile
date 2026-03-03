@@ -196,12 +196,29 @@ COPY --from=build /src/out/busyq-dev/ /opt/busyq/
 COPY scripts/custom-build.sh /usr/local/bin/custom-build
 ENTRYPOINT ["custom-build"]
 
-# ---- Custom build smoke test ----
+# ---- Custom build smoke tests ----
 FROM custom AS custom-test
-RUN printf '#!/bin/bash\nls /tmp\necho hello | cat\ndate +%%s\n' > /tmp/test.sh \
-    && custom-build --applets ls,cat,date --no-script --raw > /tmp/test-binary \
+# Test 1: Manual applets only (no script, no embed)
+RUN custom-build --applets ls,cat,date --raw > /tmp/test-binary \
     && chmod +x /tmp/test-binary \
     && /tmp/test-binary -c 'echo "custom build: ok"' \
     && /tmp/test-binary -c 'ls /' > /dev/null \
     && /tmp/test-binary -c 'date +%s' > /dev/null \
-    && echo "Custom build smoke test passed"
+    && echo "Custom build test 1 passed: manual applets"
+# Test 2: Scan + embed script
+RUN printf '#!/bin/bash\necho "EMBED_OK:$0:$1"\nls /\ndate +%%s\n' > /tmp/test.sh \
+    && custom-build --embed-script=/tmp/test.sh --raw > /tmp/test-embed \
+    && chmod +x /tmp/test-embed \
+    && /tmp/test-embed hello | grep -q 'EMBED_OK:/tmp/test-embed:hello' \
+    && echo "Custom build test 2 passed: scan + embed"
+# Test 3: --no-embed-support disables overlay
+RUN custom-build --no-embed-support --applets ls --raw > /tmp/test-noembed \
+    && chmod +x /tmp/test-noembed \
+    && /tmp/test-noembed -c 'ls /' > /dev/null \
+    && echo "Custom build test 3 passed: no embed support"
+# Test 4: Multiple --applets (cumulative)
+RUN custom-build --applets ls --applets cat --applets date --raw > /tmp/test-multi \
+    && chmod +x /tmp/test-multi \
+    && /tmp/test-multi -c 'ls /' > /dev/null \
+    && /tmp/test-multi -c 'date +%s' > /dev/null \
+    && echo "Custom build test 4 passed: cumulative --applets"
