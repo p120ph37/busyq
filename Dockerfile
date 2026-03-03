@@ -222,3 +222,18 @@ RUN custom-build --applets ls --applets cat --applets date --raw > /tmp/test-mul
     && /tmp/test-multi -c 'ls /' > /dev/null \
     && /tmp/test-multi -c 'date +%s' > /dev/null \
     && echo "Custom build test 4 passed: cumulative --applets"
+# Test 5: --busy preset
+RUN custom-build --busy --raw > /tmp/test-busy \
+    && chmod +x /tmp/test-busy \
+    && /tmp/test-busy -c 'ls /' > /dev/null \
+    && /tmp/test-busy -c 'date +%s' > /dev/null \
+    && /tmp/test-busy -c 'echo hello | grep hello' \
+    && /tmp/test-busy -c 'echo hello | sed s/hello/world/' \
+    && /tmp/test-busy -c 'tar --version' > /dev/null \
+    && echo "Custom build test 5 passed: --busy preset"
+# Test 6: --busy + --net composing presets
+RUN custom-build --busy --net --raw > /tmp/test-composed \
+    && chmod +x /tmp/test-composed \
+    && /tmp/test-composed -c 'curl --version' > /dev/null \
+    && /tmp/test-composed -c 'ls /' > /dev/null \
+    && echo "Custom build test 6 passed: composed presets"

@@ -18,6 +18,10 @@
 #   --no-embed-support   Disable embedded-script support entirely
 #                        (mutually exclusive with --embed-script)
 #   --applets LIST       Comma-separated applets to include (cumulative)
+#   --busy               Preset: minimal busybox-equivalent applet set
+#   --net                Preset: networking tools (curl, wget, nc, ping, ...)
+#   --text               Preset: text processing (awk, sed, grep, diff, ...)
+#   --archive            Preset: archival tools (tar, gzip, bzip2, xz, ...)
 #   --ssl                Use the SSL variant (includes TLS + CA certs)
 #   --raw                Output uncompressed binary (skip UPX + gzip)
 #
@@ -35,6 +39,30 @@ EXTRA_APPLETS=""
 USE_SSL=0
 RAW=0
 
+# ---- Applet presets (each is a comma-separated list of APPLET_* flag names) ----
+# Presets are cumulative with --applets and each other.
+
+# --busy: minimal busybox-equivalent (~90 applets)
+# Covers core file ops, text processing, archival, process management,
+# and basic networking — roughly what busybox defconfig provides.
+PRESET_BUSY="\
+basename,bzip2,cat,chmod,chown,chgrp,cksum,cp,cut,date,dd,df,diff,\
+dirname,du,echo,env,expr,false,find,free,gawk,grep,gzip,head,hexdump,\
+hostname,id,install,kill,killall,ln,ls,md5sum,mkdir,mkfifo,mknod,mktemp,\
+more,mv,nc,nice,nl,nohup,nproc,od,paste,patch,ping,printf,ps,pwd,\
+readlink,realpath,reset,rev,rm,rmdir,sed,seq,sha256sum,sleep,sort,stat,\
+strings,sync,tac,tail,tar,tee,test,timeout,touch,tr,true,truncate,tty,\
+uname,uniq,unzip,uptime,watch,wc,wget,which,whoami,xargs,xz,yes"
+
+# --net: networking tools
+PRESET_NET="curl,hostname,nc,ping,wget,whois"
+
+# --text: text processing and search
+PRESET_TEXT="diff,ed,find,gawk,grep,less,patch,sed,xargs"
+
+# --archive: archival and compression
+PRESET_ARCHIVE="bzip2,cpio,gzip,lzop,tar,unzip,xz,zip"
+
 while [ $# -gt 0 ]; do
     case "$1" in
         --embed-script=*) EMBED_SCRIPT="${1#--embed-script=}"; shift ;;
@@ -46,6 +74,10 @@ while [ $# -gt 0 ]; do
         --raw)     RAW=1; shift ;;
         --applets=*) EXTRA_APPLETS="$EXTRA_APPLETS${EXTRA_APPLETS:+,}${1#--applets=}"; shift ;;
         --applets) EXTRA_APPLETS="$EXTRA_APPLETS${EXTRA_APPLETS:+,}$2"; shift 2 ;;
+        --busy)    EXTRA_APPLETS="$EXTRA_APPLETS${EXTRA_APPLETS:+,}$PRESET_BUSY"; shift ;;
+        --net)     EXTRA_APPLETS="$EXTRA_APPLETS${EXTRA_APPLETS:+,}$PRESET_NET"; shift ;;
+        --text)    EXTRA_APPLETS="$EXTRA_APPLETS${EXTRA_APPLETS:+,}$PRESET_TEXT"; shift ;;
+        --archive) EXTRA_APPLETS="$EXTRA_APPLETS${EXTRA_APPLETS:+,}$PRESET_ARCHIVE"; shift ;;
         --help|-h)
             sed -n '2,/^$/s/^# //p' "$0"
             exit 0
