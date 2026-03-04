@@ -112,7 +112,7 @@ CONFEOF
             echo '    void *sym;'
             echo '} sym_table[] = {'
             for sym in \$LINK_SYMS; do
-                echo \"    { \\\"\\$sym\\\", &\\$sym },\"
+                echo \"    { \\\"\$sym\\\", &\$sym },\"
             done
             echo '    { 0, 0 }'
             echo '};'
@@ -126,22 +126,22 @@ CONFEOF
             echo ''
             # Forward-declare each link_util symbol as an opaque extern
             for sym in \$LINK_SYMS; do
-                echo \"extern char \\$sym;\"
+                echo \"extern char \$sym;\"
             done
             echo ''
             echo 'struct sym_entry { const char *name; void *sym; };'
             echo 'static struct sym_entry sym_table[] = {'
             for sym in \$LINK_SYMS; do
-                echo \"    { \\\"\\$sym\\\", &\\$sym },\"
+                echo \"    { \\\"\$sym\\\", &\$sym },\"
             done
             echo '    { 0, 0 }'
             echo '};'
             echo ''
-            echo 'void *_dlsym(void *handle, const char *sym) {'
+            echo 'void *_dlsym(void *handle, const char *s) {'
             echo '    struct sym_entry *p;'
             echo '    (void)handle;'
             echo '    for (p = sym_table; p->name; p++)'
-            echo '        if (strcmp(p->name, sym) == 0) return p->sym;'
+            echo '        if (strcmp(p->name, s) == 0) return p->sym;'
             echo '    return (void *)0;'
             echo '}'
             echo 'void *_dlopen(const char *n, int f) { (void)n; (void)f; return (void *)1; }'
