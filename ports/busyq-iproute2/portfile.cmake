@@ -84,33 +84,69 @@ CONFEOF
             name=\$(basename \$f .c)
             # Skip files that need optional deps we don't have
             case \$name in
-                bpf_glue|bpf_legacy) continue ;;  # needs libelf/libbpf
+                bpf_glue|bpf_legacy) continue ;;  # needs libelf/libbpf (stubs.c)
                 selinux) continue ;;               # needs libselinux
+                color) continue ;;                 # stubs.c provides no-op color
             esac
             \$CC \$CFLAGS -c \$f -o lib_\$name.o 2>/dev/null || {
                 echo \"Warning: skipping lib/\$name.c (compile failed)\" >&2
             }
         done
 
-        # --- Phase 2: Generate static-syms.h for static link type resolution ---
+        # --- Phase 2: Generate static-syms.h and dlsym_impl.c ---
         # iproute2's ip command uses dlsym() to find link type handlers.
-        # In static builds, a stub dlfcn.h routes to _dlsym() which uses
-        # this generated table.
-        echo 'Generating static-syms.h'
+        # In static builds, we generate a _dlsym() implementation with a
+        # compiled-in symbol table for link type resolution.
+        echo 'Generating static-syms.h and dlsym_impl.c'
+
+        # Collect link_util symbols from iplink_*.c source files
+        LINK_SYMS=\$(for f in \$SRC/ip/iplink_*.c; do
+            grep -o '[a-z_]*_link_util' \$f 2>/dev/null
+        done | sort -u)
+
+        # Write static-syms.h (included by iproute2's internal dlfcn.h)
         {
             echo '/* Auto-generated symbol table for static ip build */'
             echo 'static struct sym_entry {'
             echo '    const char *name;'
             echo '    void *sym;'
             echo '} sym_table[] = {'
-            for f in \$SRC/ip/iplink_*.c; do
-                grep -o '[a-z_]*_link_util' \$f 2>/dev/null | sort -u | while read sym; do
-                    echo \"    { \\\"\\$sym\\\", &\\$sym },\"
-                done
+            for sym in \$LINK_SYMS; do
+                echo \"    { \\\"\\$sym\\\", &\\$sym },\"
             done
             echo '    { 0, 0 }'
             echo '};'
         } > \$SRC/ip/static-syms.h
+
+        # Write dlsym_impl.c with proper forward declarations
+        {
+            echo '/* Auto-generated _dlsym/_dlopen/_dlerror for static ip build */'
+            echo '#include <stdio.h>'
+            echo '#include <string.h>'
+            echo ''
+            # Forward-declare each link_util symbol as an opaque extern
+            for sym in \$LINK_SYMS; do
+                echo \"extern char \\$sym;\"
+            done
+            echo ''
+            echo 'struct sym_entry { const char *name; void *sym; };'
+            echo 'static struct sym_entry sym_table[] = {'
+            for sym in \$LINK_SYMS; do
+                echo \"    { \\\"\\$sym\\\", &\\$sym },\"
+            done
+            echo '    { 0, 0 }'
+            echo '};'
+            echo ''
+            echo 'void *_dlsym(void *handle, const char *sym) {'
+            echo '    struct sym_entry *p;'
+            echo '    (void)handle;'
+            echo '    for (p = sym_table; p->name; p++)'
+            echo '        if (strcmp(p->name, sym) == 0) return p->sym;'
+            echo '    return (void *)0;'
+            echo '}'
+            echo 'void *_dlopen(const char *n, int f) { (void)n; (void)f; return (void *)1; }'
+            echo 'char *_dlerror(void) { return (char *)\"static build\"; }'
+        } > dlsym_impl.c
 
         # --- Phase 3: Compile ip/*.c ---
         echo 'Compiling iproute2 ip/'
@@ -131,6 +167,12 @@ CONFEOF
         done
 
         echo 'Compilation complete'
+
+        # --- Phase 4: Compile stubs for missing optional subsystems ---
+        echo 'Compiling stubs'
+        cp '${CMAKE_CURRENT_LIST_DIR}/stubs.c' stubs.c
+        \$CC \$CFLAGS -c stubs.c -o stubs.o
+        \$CC \$CFLAGS -c dlsym_impl.c -o dlsym_impl.o
     "
     WORKING_DIRECTORY "${IP_BUILD_DIR}"
     LOGNAME "compile-iproute2-${TARGET_TRIPLET}"
