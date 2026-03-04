@@ -1,20 +1,29 @@
 #!/bin/sh
-# custom-build.sh — Build a minimal busyq binary from a bash script
+# custom-build.sh — Build a busyq binary with configurable applets and embed support
 #
-# Reads a bash script from stdin (or skips scanning with --no-script),
-# determines which applets are needed, compiles a custom features.c
-# against the pre-built libbusyq.a, applies UPX compression, and
-# writes the final binary to stdout.
+# By default, builds a full binary with all applets and embedded-script
+# support enabled (but no script embedded).
+#
+# When --applets or --scan-script is present (including when implied by
+# --embed-script), only the scanned and listed applets are included.
+# Otherwise all applets are included.
 #
 # Usage:
-#   custom-build.sh [options] < script.sh > output-binary
+#   custom-build.sh [options] > output-binary
 #
 # Options:
-#   --embed       Embed the script as an overlay in the output binary
-#   --ssl         Use the SSL variant (includes TLS + CA certs)
-#   --applets L   Comma-separated list of additional applets to include
-#   --no-script   Don't read/scan a script (use with --applets)
-#   --raw         Output uncompressed binary (skip UPX + gzip)
+#   --embed-script=FILE  Embed FILE as an overlay script in the output binary
+#   --scan-script=FILE   Scan FILE for applet usage (defaults to the
+#                        --embed-script value; set to /dev/null to suppress)
+#   --no-embed-support   Disable embedded-script support entirely
+#                        (mutually exclusive with --embed-script)
+#   --applets LIST       Comma-separated applets to include (cumulative)
+#   --busy               Preset: minimal busybox-equivalent applet set
+#   --net                Preset: networking tools (curl, wget, nc, ping, ...)
+#   --text               Preset: text processing (awk, sed, grep, diff, ...)
+#   --archive            Preset: archival tools (tar, gzip, bzip2, xz, ...)
+#   --ssl                Use the SSL variant (includes TLS + CA certs)
+#   --raw                Output uncompressed binary (skip UPX + gzip)
 #
 # Environment:
 #   BUSYQ_DEV_DIR   Path to dev files (default: /opt/busyq)
@@ -22,19 +31,53 @@
 set -eu
 
 BUSYQ_DEV_DIR="${BUSYQ_DEV_DIR:-/opt/busyq}"
-EMBED=0
-USE_SSL=0
+EMBED_SCRIPT=""
+SCAN_SCRIPT=""
+SCAN_SCRIPT_SET=0
+NO_EMBED_SUPPORT=0
 EXTRA_APPLETS=""
-NO_SCRIPT=0
+USE_SSL=0
 RAW=0
+
+# ---- Applet presets (each is a comma-separated list of APPLET_* flag names) ----
+# Presets are cumulative with --applets and each other.
+
+# --busy: minimal busybox-equivalent (~90 applets)
+# Covers core file ops, text processing, archival, process management,
+# and basic networking — roughly what busybox defconfig provides.
+PRESET_BUSY="\
+basename,bzip2,cat,chmod,chown,chgrp,cksum,cp,cut,date,dd,df,diff,\
+dirname,du,echo,env,expr,false,find,free,gawk,grep,gzip,head,hexdump,\
+hostname,id,install,kill,killall,ln,ls,md5sum,mkdir,mkfifo,mknod,mktemp,\
+more,mv,nc,nice,nl,nohup,nproc,od,paste,patch,ping,printf,ps,pwd,\
+readlink,realpath,reset,rev,rm,rmdir,sed,seq,sha256sum,sleep,sort,stat,\
+strings,sync,tac,tail,tar,tee,test,timeout,touch,tr,true,truncate,tty,\
+uname,uniq,unzip,uptime,watch,wc,wget,which,whoami,xargs,xz,yes"
+
+# --net: networking tools
+PRESET_NET="curl,hostname,ip,nc,nslookup,ping,wget,whois"
+
+# --text: text processing and search
+PRESET_TEXT="diff,ed,find,gawk,grep,patch,sed,xargs"
+
+# --archive: archival and compression
+PRESET_ARCHIVE="bzip2,cpio,gzip,lzop,tar,unzip,xz,zip"
 
 while [ $# -gt 0 ]; do
     case "$1" in
-        --embed)   EMBED=1; shift ;;
+        --embed-script=*) EMBED_SCRIPT="${1#--embed-script=}"; shift ;;
+        --embed-script)   EMBED_SCRIPT="$2"; shift 2 ;;
+        --scan-script=*)  SCAN_SCRIPT="${1#--scan-script=}"; SCAN_SCRIPT_SET=1; shift ;;
+        --scan-script)    SCAN_SCRIPT="$2"; SCAN_SCRIPT_SET=1; shift 2 ;;
+        --no-embed-support) NO_EMBED_SUPPORT=1; shift ;;
         --ssl)     USE_SSL=1; shift ;;
         --raw)     RAW=1; shift ;;
-        --no-script) NO_SCRIPT=1; shift ;;
-        --applets) EXTRA_APPLETS="$2"; shift 2 ;;
+        --applets=*) EXTRA_APPLETS="$EXTRA_APPLETS${EXTRA_APPLETS:+,}${1#--applets=}"; shift ;;
+        --applets) EXTRA_APPLETS="$EXTRA_APPLETS${EXTRA_APPLETS:+,}$2"; shift 2 ;;
+        --busy)    EXTRA_APPLETS="$EXTRA_APPLETS${EXTRA_APPLETS:+,}$PRESET_BUSY"; shift ;;
+        --net)     EXTRA_APPLETS="$EXTRA_APPLETS${EXTRA_APPLETS:+,}$PRESET_NET"; shift ;;
+        --text)    EXTRA_APPLETS="$EXTRA_APPLETS${EXTRA_APPLETS:+,}$PRESET_TEXT"; shift ;;
+        --archive) EXTRA_APPLETS="$EXTRA_APPLETS${EXTRA_APPLETS:+,}$PRESET_ARCHIVE"; shift ;;
         --help|-h)
             sed -n '2,/^$/s/^# //p' "$0"
             exit 0
@@ -45,6 +88,31 @@ while [ $# -gt 0 ]; do
             ;;
     esac
 done
+
+# Validate mutual exclusivity
+if [ "$NO_EMBED_SUPPORT" = 1 ] && [ -n "$EMBED_SCRIPT" ]; then
+    echo "error: --no-embed-support and --embed-script are mutually exclusive" >&2
+    exit 1
+fi
+
+# Validate embed script exists
+if [ -n "$EMBED_SCRIPT" ] && [ ! -f "$EMBED_SCRIPT" ]; then
+    echo "error: embed script not found: $EMBED_SCRIPT" >&2
+    exit 1
+fi
+
+# Imply scan-script from embed-script when not explicitly set
+if [ "$SCAN_SCRIPT_SET" = 0 ] && [ -n "$EMBED_SCRIPT" ]; then
+    SCAN_SCRIPT="$EMBED_SCRIPT"
+    SCAN_SCRIPT_SET=1
+fi
+
+# Validate scan script exists (if set and not /dev/null)
+if [ "$SCAN_SCRIPT_SET" = 1 ] && [ -n "$SCAN_SCRIPT" ] \
+   && [ "$SCAN_SCRIPT" != "/dev/null" ] && [ ! -f "$SCAN_SCRIPT" ]; then
+    echo "error: scan script not found: $SCAN_SCRIPT" >&2
+    exit 1
+fi
 
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
@@ -61,22 +129,20 @@ if [ ! -f "$LIB" ]; then
     exit 1
 fi
 
-# Read script from stdin if not --no-script
-SCRIPT_FILE=""
+# Scan script for applet usage
 SCANNED_APPLETS=""
-if [ "$NO_SCRIPT" = 0 ]; then
-    SCRIPT_FILE="$WORK/input.sh"
-    cat > "$SCRIPT_FILE"
-
-    if [ ! -s "$SCRIPT_FILE" ]; then
-        echo "error: empty script on stdin (use --no-script for manual builds)" >&2
-        exit 1
-    fi
-
-    # Scan the script for applet usage
+if [ "$SCAN_SCRIPT_SET" = 1 ] && [ -n "$SCAN_SCRIPT" ] \
+   && [ "$SCAN_SCRIPT" != "/dev/null" ]; then
     if [ -x "$BUSYQ_DEV_DIR/busyq-scan" ]; then
-        SCANNED_APPLETS="$("$BUSYQ_DEV_DIR/busyq-scan" --applets "$SCRIPT_FILE" 2>/dev/null || true)"
+        SCANNED_APPLETS="$("$BUSYQ_DEV_DIR/busyq-scan" --applets "$SCAN_SCRIPT" 2>/dev/null || true)"
     fi
+fi
+
+# Determine if custom applets mode is active
+# Custom mode when --applets or --scan-script is present (explicitly or implied)
+CUSTOM_APPLETS=0
+if [ -n "$EXTRA_APPLETS" ] || [ "$SCAN_SCRIPT_SET" = 1 ]; then
+    CUSTOM_APPLETS=1
 fi
 
 # Merge scanned + extra applets, deduplicate
@@ -89,27 +155,30 @@ for a in $(echo "$SCANNED_APPLETS" | tr ',' ' ') $(echo "$EXTRA_APPLETS" | tr ',
 done
 ALL_APPLETS="$(echo "$ALL_APPLETS" | sed 's/^ //')"
 
-if [ -z "$ALL_APPLETS" ] && [ "$NO_SCRIPT" = 1 ]; then
-    echo "error: --no-script requires --applets" >&2
-    exit 1
+# Build compiler flags
+APPLET_DEFS=""
+if [ "$CUSTOM_APPLETS" = 1 ]; then
+    APPLET_DEFS="-DBUSYQ_CUSTOM_APPLETS"
+    for applet in $ALL_APPLETS; do
+        APPLET_DEFS="$APPLET_DEFS -DAPPLET_${applet}=1"
+    done
 fi
 
-# Build compiler flags for applet selection
-APPLET_DEFS="-DBUSYQ_CUSTOM_APPLETS"
-if [ "$EMBED" = 1 ]; then
+if [ "$NO_EMBED_SUPPORT" = 0 ]; then
     APPLET_DEFS="$APPLET_DEFS -DBUSYQ_OVERLAY"
 fi
+
 if [ "$USE_SSL" = 1 ]; then
     APPLET_DEFS="$APPLET_DEFS -DBUSYQ_SSL -DAPPLET_ssl_client=1"
 fi
 
-for applet in $ALL_APPLETS; do
-    APPLET_DEFS="$APPLET_DEFS -DAPPLET_${applet}=1"
-done
-
 # Compile and link
 OUTPUT="$WORK/busyq"
-echo "Compiling with applets: $ALL_APPLETS" >&2
+if [ "$CUSTOM_APPLETS" = 1 ]; then
+    echo "Compiling with applets: ${ALL_APPLETS:-(none)}" >&2
+else
+    echo "Compiling with all applets" >&2
+fi
 # shellcheck disable=SC2086
 clang -fuse-ld=lld $APPLET_DEFS \
     -flto -static -Os \
@@ -127,9 +196,9 @@ if [ "$RAW" = 0 ] && command -v upx >/dev/null 2>&1; then
 fi
 
 # Embed script overlay if requested
-if [ "$EMBED" = 1 ] && [ -n "$SCRIPT_FILE" ]; then
+if [ -n "$EMBED_SCRIPT" ]; then
     FINAL="$WORK/busyq-final"
-    gzip -9c "$SCRIPT_FILE" > "$WORK/script.gz"
+    gzip -9c "$EMBED_SCRIPT" > "$WORK/script.gz"
     cat "$OUTPUT" "$WORK/script.gz" > "$FINAL"
     OUTPUT="$FINAL"
 fi

@@ -36,6 +36,8 @@
     "busyq-which",
     "busyq-wget",
     "busyq-netcat",
+    "busyq-dns-tools",
+    "busyq-iproute2",
     "busyq-iputils",
     "busyq-hostname",
     "busyq-whois",

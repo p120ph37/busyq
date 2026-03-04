@@ -92,6 +92,8 @@ _busyq_find(LIB_WHICH      which)
 # Networking
 _busyq_find(LIB_WGET       wget)
 _busyq_find(LIB_NC         nc)
+_busyq_find(LIB_DNSTOOLS   dnstools)
+_busyq_find(LIB_IPROUTE2   iproute2)
 _busyq_find(LIB_PING       ping)
 _busyq_find(LIB_HOSTNAME   hostname)
 _busyq_find(LIB_WHOIS      whois)
@@ -123,6 +125,7 @@ _busyq_find(LIB_ONIG       onig)
 
 # Shared dependencies
 _busyq_find(LIB_LZO        lzo2)
+_busyq_find(LIB_MNL        mnl)
 
 # ncurses (try wide-char variant first)
 find_library(LIB_NCURSES ncursesw PATHS "${_LIB_DIR}" NO_DEFAULT_PATH)

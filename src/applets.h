@@ -57,6 +57,8 @@
  *   which      - busyq-which: libwhich
  *   wget       - busyq-wget: libwget
  *   netcat     - busyq-netcat: libnc (nc)
+ *   dnstools   - busyq-dns-tools: libdnstools (nslookup)
+ *   iproute2   - busyq-iproute2: libiproute2 (ip)
  *   iputils    - busyq-iputils: libping (ping)
  *   hostname   - busyq-hostname: libhostname
  *   whois      - busyq-whois: libwhois
@@ -311,6 +313,9 @@
 #ifndef APPLET_ionice
 #define APPLET_ionice _BQ_DEFAULT
 #endif
+#ifndef APPLET_ip
+#define APPLET_ip _BQ_DEFAULT
+#endif
 #ifndef APPLET_ipcmk
 #define APPLET_ipcmk _BQ_DEFAULT
 #endif
@@ -430,6 +435,9 @@
 #endif
 #ifndef APPLET_nsenter
 #define APPLET_nsenter _BQ_DEFAULT
+#endif
+#ifndef APPLET_nslookup
+#define APPLET_nslookup _BQ_DEFAULT
 #endif
 #ifndef APPLET_numfmt
 #define APPLET_numfmt _BQ_DEFAULT
@@ -849,6 +857,7 @@ _BQ_IF(APPLET_hostname)(APPLET(hostname, hostname, hostname_main))
 _BQ_IF(APPLET_id)(APPLET(coreutils, id, single_binary_main_id))
 _BQ_IF(APPLET_install)(APPLET(coreutils, install, single_binary_main_ginstall))
 _BQ_IF(APPLET_ionice)(APPLET(utillinux, ionice, ionice_main))
+_BQ_IF(APPLET_ip)(APPLET(iproute2, ip, ip_main))
 _BQ_IF(APPLET_ipcmk)(APPLET(utillinux, ipcmk, ipcmk_main))
 _BQ_IF(APPLET_ipcrm)(APPLET(utillinux, ipcrm, ipcrm_main))
 _BQ_IF(APPLET_ipcs)(APPLET(utillinux, ipcs, ipcs_main))
@@ -893,6 +902,7 @@ _BQ_IF(APPLET_nohup)(APPLET(coreutils, nohup, single_binary_main_nohup))
 _BQ_IF(APPLET_nologin)(APPLET(utillinux, nologin, nologin_main))
 _BQ_IF(APPLET_nproc)(APPLET(coreutils, nproc, single_binary_main_nproc))
 _BQ_IF(APPLET_nsenter)(APPLET(utillinux, nsenter, nsenter_main))
+_BQ_IF(APPLET_nslookup)(APPLET(dnstools, nslookup, nslookup_main))
 _BQ_IF(APPLET_numfmt)(APPLET(coreutils, numfmt, single_binary_main_numfmt))
 _BQ_IF(APPLET_od)(APPLET(coreutils, od, single_binary_main_od))
 _BQ_IF(APPLET_paste)(APPLET(coreutils, paste, single_binary_main_paste))

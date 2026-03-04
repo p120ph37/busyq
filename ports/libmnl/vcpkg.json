@@ -1,0 +1,16 @@
+{
+  "name": "libmnl",
+  "version-string": "1.0.5",
+  "description": "Minimalistic Netlink library (libmnl) for iproute2",
+  "license": "LGPL-2.1-or-later",
+  "dependencies": [
+    {
+      "name": "vcpkg-cmake-get-vars",
+      "host": true
+    },
+    {
+      "name": "vcpkg-make",
+      "host": true
+    }
+  ]
+}
